@@ -1,0 +1,157 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 2,
+    "knn": true,
+    "analysis": {
+      "filter": {
+        "english_stop": {
+          "type": "stop",
+          "stopwords": "_english_"
+        },
+        "english_stem": {
+          "type": "stemmer",
+          "language": "english"
+        },
+        "english_stem_light": {
+          "type": "stemmer",
+          "language": "possessive_english"
+        }
+      },
+      "analyzer": {
+        "analyze_english": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "char_filter": ["html_strip"],
+          "filter": ["lowercase", "english_stop", "english_stem"]
+        },
+        "analyze_english_precise": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "char_filter": ["html_strip"],
+          "filter": ["lowercase", "english_stem_light"]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "gutenberg_id": {
+        "type": "keyword"
+      },
+      "title": {
+        "type": "text",
+        "analyzer": "analyze_english",
+        "copy_to": ["title_precise"]
+      },
+      "copyright": {
+        "type": "boolean"
+      },
+      "media_type": {
+        "type": "keyword"
+      },
+      "download_count": {
+        "type": "integer"
+      },
+      "author_names": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "author_birth_years": {
+        "type": "short"
+      },
+      "author_death_years": {
+        "type": "short"
+      },
+      "editor_names": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "editor_birth_years": {
+        "type": "short"
+      },
+      "editor_death_years": {
+        "type": "short"
+      },
+      "translator_names": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "translator_birth_years": {
+        "type": "short"
+      },
+      "translator_death_years": {
+        "type": "short"
+      },
+      "subjects": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "bookshelves": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "languages": {
+        "type": "keyword"
+      },
+      "summaries": {
+        "type": "text",
+        "analyzer": "analyze_english",
+        "copy_to": ["summaries_precise"]
+      },
+      "title_precise": {
+        "type": "text",
+        "analyzer": "analyze_english_precise"
+      },
+      "summaries_precise": {
+        "type": "text",
+        "analyzer": "analyze_english_precise"
+      },
+      "summaries_embedding": {
+        "type": "knn_vector",
+        "dimension": 768,
+        "data_type": "float",
+        "mode": "on_disk",
+        "compression_level": "32x",
+        "method": {
+          "engine": "faiss",
+          "name": "hnsw",
+          "space_type": "l2",
+          "parameters": {
+            "ef_construction": 128,
+            "m": 16
+          }
+        }
+      },
+      "formats": {
+        "type": "object",
+        "enabled": false
+      }
+    }
+  }
+}

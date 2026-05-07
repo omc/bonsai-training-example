@@ -1,0 +1,14 @@
+{
+  "name": "Bonsai Search",
+  "description": "Search application powered by OpenSearch",
+  "keywords": ["node", "express", "opensearch"],
+  "env": {
+    "OPENSEARCH_URL": {
+      "description": "Full URL to OpenSearch cluster (including credentials)",
+      "required": true
+    }
+  },
+  "buildpacks": [
+    { "url": "heroku/nodejs" }
+  ]
+}

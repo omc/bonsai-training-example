@@ -1,0 +1,19 @@
+{
+  "name": "bonsai-search",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bonsai Search application powered by OpenSearch",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --env-file=../.env --watch server.js"
+  },
+  "engines": {
+    "node": "24.x"
+  },
+  "dependencies": {
+    "@opensearch-project/opensearch": "^3.5.0",
+    "ejs": "^5.0.2",
+    "express": "^5.1.0"
+  }
+}
