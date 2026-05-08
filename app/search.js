@@ -2,8 +2,9 @@ const { Client } = require("@opensearch-project/opensearch");
 const client = new Client({ node: process.env.BONSAI_URL });
 
 //All the "getQuery" methods below are iterations on relevance
-const getQuery = function (querystring, k) {
+const getQuery = function (querystring, k, filters) {
   k = k || 10;
+  filters = filters || {};
 
   let body = {
     size: k,
@@ -123,16 +124,84 @@ const getQuery = function (querystring, k) {
     },
   };
 
+  // --- apply filter clauses from sidebar selections ---
+  var filterClauses = [];
+
+  var termFilterMap = {
+    subjects: "subjects.keyword",
+    authors: "author_names.keyword",
+    bookshelves: "bookshelves.keyword",
+    languages: "languages",
+    media_type: "media_type",
+  };
+
+  Object.keys(termFilterMap).forEach(function (param) {
+    if (filters[param] && filters[param].length) {
+      filterClauses.push({ terms: { [termFilterMap[param]]: filters[param] } });
+    }
+  });
+
+  if (filters.copyright && filters.copyright.length) {
+    var boolVals = filters.copyright.map(function (v) {
+      return v === "true";
+    });
+    filterClauses.push({ terms: { copyright: boolVals } });
+  }
+
+  if (filters.popularity && filters.popularity.length) {
+    var popRanges = {
+      low: { lt: 100 },
+      moderate: { gte: 100, lt: 1000 },
+      popular: { gte: 1000, lt: 10000 },
+      very_popular: { gte: 10000 },
+    };
+    var popShould = filters.popularity
+      .filter(function (k) {
+        return popRanges[k];
+      })
+      .map(function (k) {
+        return { range: { download_count: popRanges[k] } };
+      });
+    if (popShould.length) {
+      filterClauses.push({
+        bool: { should: popShould, minimum_should_match: 1 },
+      });
+    }
+  }
+
+  if (filters.author_era && filters.author_era.length) {
+    var eraShould = filters.author_era
+      .map(function (v) {
+        return parseInt(v, 10);
+      })
+      .filter(function (n) {
+        return !isNaN(n);
+      })
+      .map(function (start) {
+        return {
+          range: { author_birth_years: { gte: start, lt: start + 100 } },
+        };
+      });
+    if (eraShould.length) {
+      filterClauses.push({
+        bool: { should: eraShould, minimum_should_match: 1 },
+      });
+    }
+  }
+
+  if (filterClauses.length) {
+    body.query.function_score.query.bool.filter = filterClauses;
+  }
+
   return body;
 };
 
-const search = async function (collection, querystring, k) {
-  const body = getQuery(querystring, k);
+const search = async function (collection, querystring, k, filters) {
+  const body = getQuery(querystring, k, filters);
   const resp = await client.search({
     index: collection,
     body: body,
   });
-  console.log(JSON.stringify(resp, null, 2));
   return resp;
 };
 

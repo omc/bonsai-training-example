@@ -34,9 +34,25 @@ app.get("/", async (req, res) => {
 
 app.get("/search", async (req, res) => {
   const query = req.query.q || "";
-  const results = await search("books", query, 10);
-  console.log(results);
-  res.render("results", { query, results });
+  const filterKeys = [
+    "subjects",
+    "authors",
+    "bookshelves",
+    "languages",
+    "media_type",
+    "copyright",
+    "popularity",
+    "author_era",
+  ];
+  const filters = {};
+  filterKeys.forEach((key) => {
+    if (req.query[key]) {
+      filters[key] = [].concat(req.query[key]);
+    }
+  });
+  console.log(JSON.stringify(req.query));
+  const results = await search("books", query, 10, filters);
+  res.render("results", { query, results, filters });
 });
 
 // --- Start ---

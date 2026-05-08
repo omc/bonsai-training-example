@@ -4,9 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>bonsai &mdash; <%= query %></title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="/css/fonts.css" rel="stylesheet">
   <link href="/css/results.css" rel="stylesheet">
 </head>
 <body>
@@ -31,6 +29,10 @@
     var totalCount = (typeof total === 'object') ? total.value : total;
     var took = results.body.took;
     var aggs = results.body.aggregations || {};
+    var f = filters || {};
+    function isChecked(param, val) {
+      return f[param] && f[param].indexOf(String(val)) !== -1;
+    }
   %>
 
   <div class="count-row">
@@ -38,7 +40,11 @@
   </div>
 
   <div class="layout">
-    <aside class="filters">
+    <button class="filters-toggle" type="button" aria-expanded="false" aria-controls="filters-panel">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="12" y1="18" x2="20" y2="18"/></svg>
+      Filters
+    </button>
+    <aside class="filters" id="filters-panel">
       <h2>Filters</h2>
 
       <% if (aggs.subjects && aggs.subjects.buckets.length) { %>
@@ -49,7 +55,7 @@
         </h3>
         <div class="filter-body">
           <% aggs.subjects.buckets.forEach(function(b) { %>
-          <label class="filter-row"><input type="checkbox" /> <%= b.key %> <span class="count"><%= b.doc_count %></span></label>
+          <label class="filter-row"><input type="checkbox" name="subjects" value="<%= b.key %>"<%= isChecked('subjects', b.key) ? ' checked' : '' %> /> <%= b.key %> <span class="count"><%= b.doc_count %></span></label>
           <% }); %>
         </div>
       </div>
@@ -63,7 +69,7 @@
         </h3>
         <div class="filter-body">
           <% aggs.authors.buckets.forEach(function(b) { %>
-          <label class="filter-row"><input type="checkbox" /> <%= b.key %> <span class="count"><%= b.doc_count %></span></label>
+          <label class="filter-row"><input type="checkbox" name="authors" value="<%= b.key %>"<%= isChecked('authors', b.key) ? ' checked' : '' %> /> <%= b.key %> <span class="count"><%= b.doc_count %></span></label>
           <% }); %>
         </div>
       </div>
@@ -77,7 +83,7 @@
         </h3>
         <div class="filter-body">
           <% aggs.bookshelves.buckets.forEach(function(b) { %>
-          <label class="filter-row"><input type="checkbox" /> <%= b.key %> <span class="count"><%= b.doc_count %></span></label>
+          <label class="filter-row"><input type="checkbox" name="bookshelves" value="<%= b.key %>"<%= isChecked('bookshelves', b.key) ? ' checked' : '' %> /> <%= b.key %> <span class="count"><%= b.doc_count %></span></label>
           <% }); %>
         </div>
       </div>
@@ -91,7 +97,7 @@
         </h3>
         <div class="filter-body">
           <% aggs.languages.buckets.forEach(function(b) { %>
-          <label class="filter-row"><input type="checkbox" /> <%= b.key %> <span class="count"><%= b.doc_count %></span></label>
+          <label class="filter-row"><input type="checkbox" name="languages" value="<%= b.key %>"<%= isChecked('languages', b.key) ? ' checked' : '' %> /> <%= b.key %> <span class="count"><%= b.doc_count %></span></label>
           <% }); %>
         </div>
       </div>
@@ -105,7 +111,7 @@
         </h3>
         <div class="filter-body">
           <% aggs.media_type.buckets.forEach(function(b) { %>
-          <label class="filter-row"><input type="checkbox" /> <%= b.key %> <span class="count"><%= b.doc_count %></span></label>
+          <label class="filter-row"><input type="checkbox" name="media_type" value="<%= b.key %>"<%= isChecked('media_type', b.key) ? ' checked' : '' %> /> <%= b.key %> <span class="count"><%= b.doc_count %></span></label>
           <% }); %>
         </div>
       </div>
@@ -119,7 +125,7 @@
         </h3>
         <div class="filter-body">
           <% aggs.copyright.buckets.forEach(function(b) { %>
-          <label class="filter-row"><input type="checkbox" /> <%= b.key_as_string === 'true' ? 'Copyrighted' : 'Public Domain' %> <span class="count"><%= b.doc_count %></span></label>
+          <label class="filter-row"><input type="checkbox" name="copyright" value="<%= b.key_as_string %>"<%= isChecked('copyright', b.key_as_string) ? ' checked' : '' %> /> <%= b.key_as_string === 'true' ? 'Copyrighted' : 'Public Domain' %> <span class="count"><%= b.doc_count %></span></label>
           <% }); %>
         </div>
       </div>
@@ -133,7 +139,7 @@
         </h3>
         <div class="filter-body">
           <% aggs.popularity.buckets.forEach(function(b) { if (b.doc_count > 0) { %>
-          <label class="filter-row"><input type="checkbox" /> <%= b.key.replace('_', ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); }) %> <span class="count"><%= b.doc_count %></span></label>
+          <label class="filter-row"><input type="checkbox" name="popularity" value="<%= b.key %>"<%= isChecked('popularity', b.key) ? ' checked' : '' %> /> <%= b.key.replace('_', ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); }) %> <span class="count"><%= b.doc_count %></span></label>
           <% } }); %>
         </div>
       </div>
@@ -147,13 +153,13 @@
         </h3>
         <div class="filter-body">
           <% aggs.author_era.buckets.forEach(function(b) { if (b.doc_count > 0) { %>
-          <label class="filter-row"><input type="checkbox" /> <%= b.key %>s <span class="count"><%= b.doc_count %></span></label>
+          <label class="filter-row"><input type="checkbox" name="author_era" value="<%= b.key %>"<%= isChecked('author_era', b.key) ? ' checked' : '' %> /> <%= b.key %>s <span class="count"><%= b.doc_count %></span></label>
           <% } }); %>
         </div>
       </div>
       <% } %>
 
-      <button class="clear-btn">Clear all filters</button>
+      <a class="clear-btn" href="/search?q=<%= encodeURIComponent(query) %>">Clear all filters</a>
     </aside>
 
     <main class="results">
@@ -210,9 +216,9 @@
     <div class="footer-row">
       <div>&copy; 2026 Bonsai</div>
       <div class="links">
-        <a href="#">About</a>
-        <a href="#">Privacy</a>
-        <a href="#">Terms</a>
+        <a href="https://bonsai.io/">About</a>
+        <a href="https://bonsai.io/privacy">Privacy</a>
+        <a href="https://bonsai.io/terms">Terms</a>
       </div>
     </div>
   </footer>
@@ -221,6 +227,26 @@
     document.querySelectorAll('.filter-group h3').forEach(function (h) {
       h.addEventListener('click', function () {
         h.parentElement.classList.toggle('collapsed');
+      });
+    });
+
+    var toggle = document.querySelector('.filters-toggle');
+    var panel = document.getElementById('filters-panel');
+    if (toggle && panel) {
+      toggle.addEventListener('click', function () {
+        var open = panel.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', String(open));
+      });
+    }
+
+    document.querySelectorAll('.filters input[type="checkbox"]').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        var params = new URLSearchParams();
+        params.set('q', '<%= query.replace(/'/g, "\\'") %>');
+        document.querySelectorAll('.filters input[type="checkbox"]:checked').forEach(function (checked) {
+          params.append(checked.name, checked.value);
+        });
+        window.location.href = '/search?' + params.toString();
       });
     });
   </script>
