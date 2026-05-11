@@ -196,8 +196,9 @@ const getQuery = function (querystring, k, filters) {
   return body;
 };
 
-const search = async function (collection, querystring, k, filters) {
+const search = async function (collection, querystring, k, filters, from) {
   const body = getQuery(querystring, k, filters);
+  body.from = from || 0;
   const resp = await client.search({
     index: collection,
     body: body,

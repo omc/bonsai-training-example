@@ -50,9 +50,12 @@ app.get("/search", async (req, res) => {
       filters[key] = [].concat(req.query[key]);
     }
   });
+  const perPage = 10;
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const from = (page - 1) * perPage;
   console.log(JSON.stringify(req.query));
-  const results = await search("books", query, 10, filters);
-  res.render("results", { query, results, filters });
+  const results = await search("books", query, perPage, filters, from);
+  res.render("results", { query, results, filters, page, perPage });
 });
 
 // --- Start ---

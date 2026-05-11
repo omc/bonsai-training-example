@@ -4,6 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>bonsai &mdash; <%= query %></title>
+  <link rel="shortcut icon" type="image/x-icon" href="https://cdn.prod.website-files.com/63c81e4decde60c281417feb/63c81e4decde604e0c417ffb_Favicon.png" />
+  <link rel="apple-touch-icon" href="https://cdn.prod.website-files.com/63c81e4decde60c281417feb/63c81e4decde602edf417ffc_Webclip.png" />
   <link href="/css/fonts.css" rel="stylesheet">
   <link href="/css/results.css" rel="stylesheet">
 </head>
@@ -209,6 +211,53 @@
         </div>
       </article>
       <% }); %>
+
+      <%
+        var totalPages = Math.ceil(totalCount / perPage);
+        if (totalPages > 1) {
+          // build base query string preserving q + filters (not page)
+          var baseParams = new URLSearchParams();
+          baseParams.set('q', query);
+          var fKeys = Object.keys(f);
+          fKeys.forEach(function(key) {
+            [].concat(f[key]).forEach(function(val) {
+              baseParams.append(key, val);
+            });
+          });
+          function pageUrl(p) {
+            var ps = new URLSearchParams(baseParams);
+            if (p > 1) ps.set('page', p);
+            return '/search?' + ps.toString();
+          }
+
+          // compute visible page window (max 7 pages shown)
+          var windowSize = 7;
+          var startPage = Math.max(1, page - Math.floor(windowSize / 2));
+          var endPage = Math.min(totalPages, startPage + windowSize - 1);
+          if (endPage - startPage + 1 < windowSize) {
+            startPage = Math.max(1, endPage - windowSize + 1);
+          }
+      %>
+      <nav class="pagination" aria-label="Search results pages">
+        <% if (page > 1) { %>
+        <a class="page-arrow" href="<%= pageUrl(page - 1) %>">&laquo; Prev</a>
+        <% } %>
+        <% if (startPage > 1) { %>
+        <a class="page-num" href="<%= pageUrl(1) %>">1</a>
+        <% if (startPage > 2) { %><span class="page-num">&hellip;</span><% } %>
+        <% } %>
+        <% for (var p = startPage; p <= endPage; p++) { %>
+        <a class="page-num<%= p === page ? ' active' : '' %>" href="<%= pageUrl(p) %>"><%= p %></a>
+        <% } %>
+        <% if (endPage < totalPages) { %>
+        <% if (endPage < totalPages - 1) { %><span class="page-num">&hellip;</span><% } %>
+        <a class="page-num" href="<%= pageUrl(totalPages) %>"><%= totalPages %></a>
+        <% } %>
+        <% if (page < totalPages) { %>
+        <a class="page-arrow" href="<%= pageUrl(page + 1) %>">Next &raquo;</a>
+        <% } %>
+      </nav>
+      <% } %>
     </main>
   </div>
 
