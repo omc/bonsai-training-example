@@ -15,7 +15,7 @@
   <header class="app-header">
     <div class="header-inner">
       <a href="/"><img src="/img/logo.svg" width="100" height="28"></a>
-      <form class="search" action="/search" method="get" autocomplete="off" role="search">
+      <form class="search" action="/<%= dataset %>/search" method="get" autocomplete="off" role="search">
         <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="11" cy="11" r="7"/>
           <path d="M20 20l-3.5-3.5"/>
@@ -49,119 +49,32 @@
     <aside class="filters" id="filters-panel">
       <h2>Filters</h2>
 
-      <% if (aggs.subjects && aggs.subjects.buckets.length) { %>
+      <% config.aggregations.forEach(function(aggConf) {
+        var aggData = aggs[aggConf.name];
+        if (!aggData || !aggData.buckets || !aggData.buckets.length) return;
+        var buckets = aggData.buckets;
+        if (aggConf.hideEmpty) {
+          buckets = buckets.filter(function(b) { return b.doc_count > 0; });
+        }
+        if (!buckets.length) return;
+      %>
       <div class="filter-group">
         <h3>
-          Subject
+          <%= aggConf.label %>
           <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </h3>
         <div class="filter-body">
-          <% aggs.subjects.buckets.forEach(function(b) { %>
-          <label class="filter-row"><input type="checkbox" name="subjects" value="<%= b.key %>"<%= isChecked('subjects', b.key) ? ' checked' : '' %> /> <%= b.key %> <span class="count"><%= b.doc_count %></span></label>
+          <% buckets.forEach(function(b) {
+            var displayLabel = aggConf.formatBucket ? aggConf.formatBucket(b) : b.key;
+            var checkboxValue = aggConf.bucketValue ? aggConf.bucketValue(b) : b.key;
+          %>
+          <label class="filter-row"><input type="checkbox" name="<%= aggConf.name %>" value="<%= checkboxValue %>"<%= isChecked(aggConf.name, checkboxValue) ? ' checked' : '' %> /> <%= displayLabel %> <span class="count"><%= b.doc_count %></span></label>
           <% }); %>
         </div>
       </div>
-      <% } %>
+      <% }); %>
 
-      <% if (aggs.authors && aggs.authors.buckets.length) { %>
-      <div class="filter-group">
-        <h3>
-          Author
-          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </h3>
-        <div class="filter-body">
-          <% aggs.authors.buckets.forEach(function(b) { %>
-          <label class="filter-row"><input type="checkbox" name="authors" value="<%= b.key %>"<%= isChecked('authors', b.key) ? ' checked' : '' %> /> <%= b.key %> <span class="count"><%= b.doc_count %></span></label>
-          <% }); %>
-        </div>
-      </div>
-      <% } %>
-
-      <% if (aggs.bookshelves && aggs.bookshelves.buckets.length) { %>
-      <div class="filter-group">
-        <h3>
-          Bookshelf
-          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </h3>
-        <div class="filter-body">
-          <% aggs.bookshelves.buckets.forEach(function(b) { %>
-          <label class="filter-row"><input type="checkbox" name="bookshelves" value="<%= b.key %>"<%= isChecked('bookshelves', b.key) ? ' checked' : '' %> /> <%= b.key %> <span class="count"><%= b.doc_count %></span></label>
-          <% }); %>
-        </div>
-      </div>
-      <% } %>
-
-      <% if (aggs.languages && aggs.languages.buckets.length) { %>
-      <div class="filter-group">
-        <h3>
-          Language
-          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </h3>
-        <div class="filter-body">
-          <% aggs.languages.buckets.forEach(function(b) { %>
-          <label class="filter-row"><input type="checkbox" name="languages" value="<%= b.key %>"<%= isChecked('languages', b.key) ? ' checked' : '' %> /> <%= b.key %> <span class="count"><%= b.doc_count %></span></label>
-          <% }); %>
-        </div>
-      </div>
-      <% } %>
-
-      <% if (aggs.media_type && aggs.media_type.buckets.length) { %>
-      <div class="filter-group">
-        <h3>
-          Media Type
-          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </h3>
-        <div class="filter-body">
-          <% aggs.media_type.buckets.forEach(function(b) { %>
-          <label class="filter-row"><input type="checkbox" name="media_type" value="<%= b.key %>"<%= isChecked('media_type', b.key) ? ' checked' : '' %> /> <%= b.key %> <span class="count"><%= b.doc_count %></span></label>
-          <% }); %>
-        </div>
-      </div>
-      <% } %>
-
-      <% if (aggs.copyright && aggs.copyright.buckets.length) { %>
-      <div class="filter-group">
-        <h3>
-          Copyright
-          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </h3>
-        <div class="filter-body">
-          <% aggs.copyright.buckets.forEach(function(b) { %>
-          <label class="filter-row"><input type="checkbox" name="copyright" value="<%= b.key_as_string %>"<%= isChecked('copyright', b.key_as_string) ? ' checked' : '' %> /> <%= b.key_as_string === 'true' ? 'Copyrighted' : 'Public Domain' %> <span class="count"><%= b.doc_count %></span></label>
-          <% }); %>
-        </div>
-      </div>
-      <% } %>
-
-      <% if (aggs.popularity && aggs.popularity.buckets.length) { %>
-      <div class="filter-group">
-        <h3>
-          Popularity
-          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </h3>
-        <div class="filter-body">
-          <% aggs.popularity.buckets.forEach(function(b) { if (b.doc_count > 0) { %>
-          <label class="filter-row"><input type="checkbox" name="popularity" value="<%= b.key %>"<%= isChecked('popularity', b.key) ? ' checked' : '' %> /> <%= b.key.replace('_', ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); }) %> <span class="count"><%= b.doc_count %></span></label>
-          <% } }); %>
-        </div>
-      </div>
-      <% } %>
-
-      <% if (aggs.author_era && aggs.author_era.buckets.length) { %>
-      <div class="filter-group">
-        <h3>
-          Author Era
-          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </h3>
-        <div class="filter-body">
-          <% aggs.author_era.buckets.forEach(function(b) { if (b.doc_count > 0) { %>
-          <label class="filter-row"><input type="checkbox" name="author_era" value="<%= b.key %>"<%= isChecked('author_era', b.key) ? ' checked' : '' %> /> <%= b.key %>s <span class="count"><%= b.doc_count %></span></label>
-          <% } }); %>
-        </div>
-      </div>
-      <% } %>
-
-      <a class="clear-btn" href="/search?q=<%= encodeURIComponent(query) %>">Clear all filters</a>
+      <a class="clear-btn" href="/<%= dataset %>/search?q=<%= encodeURIComponent(query) %>">Clear all filters</a>
     </aside>
 
     <main class="results">
@@ -171,13 +84,10 @@
 
       <% hits.forEach(function(hit) {
         var src = hit._source;
-        var authors = [].concat(src.author_names || []);
-        var subjects = [].concat(src.subjects || []);
-        var languages = [].concat(src.languages || []);
-        var summaries = [].concat(src.summaries || []);
-        var snippet = summaries.length ? summaries[0] : '';
-        var img = src.formats && src.formats['image/jpeg'] || '/img/book.svg';
-        if (snippet.length > 300) snippet = snippet.substring(0, 300) + '...';
+        var img = config.display.image(src) || config.display.imageFallback;
+        var snippet = config.display.snippet ? config.display.snippet(src) : null;
+        var link = config.display.linkTemplate(src);
+        var title = src[config.display.titleField];
       %>
       <article class="result">
         <div class="thumb" aria-hidden="true">
@@ -185,28 +95,26 @@
         </div>
         <div>
           <div class="meta-row">
-            <% if (authors.length) { %>
-            <span><%= authors.join(', ') %></span>
-            <span class="meta-sep">&middot;</span>
-            <% } %>
-            <% if (languages.length) { %>
-            <span><%= languages.join(', ') %></span>
-            <span class="meta-sep">&middot;</span>
-            <% } %>
-            <% if (src.download_count != null) { %>
-            <span><%= src.download_count.toLocaleString() %> downloads</span>
-            <% } %>
+            <% config.display.subtitleFields.forEach(function(sf, i) {
+              var val = sf.value(src);
+              if (val) { %>
+            <% if (i > 0) { %><span class="meta-sep">&middot;</span><% } %>
+            <span><%= val %></span>
+            <% }
+            }); %>
           </div>
-          <h3><a href="https://www.gutenberg.org/ebooks/<%= src.gutenberg_id %>"><%= src.title %></a></h3>
+          <h3><a href="<%= link %>"><%= title %></a></h3>
           <% if (snippet) { %>
           <p class="snippet"><%= snippet %></p>
           <% } %>
           <div class="result-tags">
-            <% if (src.media_type) { %><span class="tag"><%= src.media_type %></span><% } %>
-            <% if (src.copyright === false) { %><span class="tag">Public Domain</span><% } %>
-            <% subjects.slice(0, 3).forEach(function(s) { %>
-            <span class="tag"><%= s %></span>
-            <% }); %>
+            <% config.display.tags.forEach(function(tagFn) {
+              var tagVal = tagFn(src);
+              var tagArr = [].concat(tagVal || []).filter(function(t) { return t != null; });
+              tagArr.forEach(function(t) { %>
+            <span class="tag"><%= t %></span>
+            <%   });
+            }); %>
           </div>
         </div>
       </article>
@@ -215,7 +123,6 @@
       <%
         var totalPages = Math.ceil(totalCount / perPage);
         if (totalPages > 1) {
-          // build base query string preserving q + filters (not page)
           var baseParams = new URLSearchParams();
           baseParams.set('q', query);
           var fKeys = Object.keys(f);
@@ -227,10 +134,9 @@
           function pageUrl(p) {
             var ps = new URLSearchParams(baseParams);
             if (p > 1) ps.set('page', p);
-            return '/search?' + ps.toString();
+            return '/' + dataset + '/search?' + ps.toString();
           }
 
-          // compute visible page window (max 7 pages shown)
           var windowSize = 7;
           var startPage = Math.max(1, page - Math.floor(windowSize / 2));
           var endPage = Math.min(totalPages, startPage + windowSize - 1);
@@ -295,7 +201,7 @@
         document.querySelectorAll('.filters input[type="checkbox"]:checked').forEach(function (checked) {
           params.append(checked.name, checked.value);
         });
-        window.location.href = '/search?' + params.toString();
+        window.location.href = '/<%= dataset %>/search?' + params.toString();
       });
     });
   </script>

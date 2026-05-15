@@ -139,3 +139,25 @@ footer.app-footer {
 .rise { animation: rise .5s cubic-bezier(.2,.7,.2,1) both; }
 .rise.d1 { animation-delay: .04s; }
 .rise.d2 { animation-delay: .14s; }
+
+.dataset-picker {
+    display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+    margin: 18px 0 4px;
+}
+.dataset-btn {
+    display: inline-block;
+    padding: 6px 18px;
+    border: 1px solid var(--line-2);
+    border-radius: 20px;
+    text-decoration: none;
+    font: 14px/1.4 var(--font-ui);
+    color: var(--ink-2);
+    background: var(--bg);
+    transition: border-color .15s, color .15s, background .15s;
+}
+.dataset-btn:hover { border-color: var(--green); color: var(--green); }
+.dataset-btn.active {
+    background: var(--green);
+    color: #fff;
+    border-color: var(--green);
+}

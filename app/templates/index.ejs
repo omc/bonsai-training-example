@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Bonsai Search</title>
+  <title>Bonsai Search &mdash; <%= config.label %></title>
   <link rel="shortcut icon" type="image/x-icon" href="https://cdn.prod.website-files.com/63c81e4decde60c281417feb/63c81e4decde604e0c417ffb_Favicon.png" />
   <link rel="apple-touch-icon" href="https://cdn.prod.website-files.com/63c81e4decde60c281417feb/63c81e4decde602edf417ffc_Webclip.png" />
   <link href="/css/fonts.css" rel="stylesheet">
@@ -15,12 +15,18 @@
   <main class="stage">
     <div><img src="/img/logo.svg" width="300" height="84"></div>
 
-    <form class="search rise d2" action="/search" method="get" autocomplete="off" role="search">
+    <div class="dataset-picker rise d1">
+      <% datasets.forEach(function(ds) { %>
+      <a href="/<%= ds.slug %>/" class="dataset-btn<%= ds.slug === dataset ? ' active' : '' %>"><%= ds.label %></a>
+      <% }); %>
+    </div>
+
+    <form class="search rise d2" action="/<%= dataset %>/search" method="get" autocomplete="off" role="search">
       <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="11" cy="11" r="7"/>
         <path d="M20 20l-3.5-3.5"/>
       </svg>
-      <input name="q" type="text" placeholder="Search..." aria-label="Search" spellcheck="false" />
+      <input name="q" type="text" placeholder="Search <%= config.label %>..." aria-label="Search" spellcheck="false" />
     </form>
   </main>
 
