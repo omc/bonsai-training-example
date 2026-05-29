@@ -1,138 +1,146 @@
 const { Client } = require("@opensearch-project/opensearch");
 const client = new Client({ node: process.env.BONSAI_URL });
 
-//All the "getQuery" methods below are iterations on relevance
-const getQuery = function (querystring, k) {
+const getQuery = function (config, querystring, k, filters) {
   k = k || 10;
+  filters = filters || {};
 
-  let body = {
-    size: k,
-    query: {
+  // --- build should clauses from config ---
+  var shouldClauses = config.query.clauses.map(function (clause) {
+    if (clause.type === "match_phrase") {
+      var mp = { query: querystring, boost: clause.boost };
+      if (clause.slop != null) mp.slop = clause.slop;
+      return { match_phrase: { [clause.field]: mp } };
+    }
+    if (clause.type === "multi_match") {
+      return {
+        multi_match: {
+          query: querystring,
+          type: clause.matchType,
+          fields: clause.fields,
+          boost: clause.boost,
+        },
+      };
+    }
+    return null;
+  }).filter(Boolean);
+
+  // --- build core bool query ---
+  var boolQuery = { bool: { should: shouldClauses } };
+
+  // --- wrap in function_score if scoreFunction configured ---
+  var queryBody;
+  if (config.query.scoreFunction) {
+    queryBody = {
       function_score: {
-        query: {
-          bool: {
-            should: [
-              {
-                match_phrase: {
-                  title_precise: {
-                    query: querystring,
-                    boost: 2.0,
-                  },
-                },
-              },
-              {
-                match_phrase: {
-                  summaries_precise: {
-                    query: querystring,
-                    boost: 1.4,
-                  },
-                },
-              },
-              {
-                match_phrase: {
-                  author_names: {
-                    query: querystring,
-                    boost: 1.4,
-                    slop: 1,
-                  },
-                },
-              },
-
-              {
-                multi_match: {
-                  query: querystring,
-                  type: "cross_fields",
-                  fields: [
-                    "title_precise",
-                    "summaries_precise",
-                    "author_names",
-                    "editor_names",
-                    "translator_names",
-                    "subjects",
-                    "bookshelves",
-                    "languages",
-                    "media_type",
-                  ],
-                  boost: 1.2,
-                },
-              },
-              {
-                multi_match: {
-                  query: querystring,
-                  type: "cross_fields",
-                  fields: ["title", "summaries"],
-                  boost: 1.0,
-                },
-              },
-              {
-                multi_match: {
-                  query: querystring,
-                  type: "cross_fields",
-                  fields: ["page"],
-                  boost: 1.0,
-                },
-              },
-            ],
-          },
-        },
+        query: boolQuery,
         field_value_factor: {
-          field: "download_count",
-          modifier: "log1p",
-          factor: 1.0,
+          field: config.query.scoreFunction.field,
+          modifier: config.query.scoreFunction.modifier,
+          factor: config.query.scoreFunction.factor,
         },
-        boost_mode: "sum",
+        boost_mode: config.query.boostMode || "sum",
       },
-    },
-    _source: { excludes: ["summaries_embedding"] },
-    aggs: {
-      subjects: {
-        terms: { field: "subjects.keyword", size: 20 },
-      },
-      bookshelves: {
-        terms: { field: "bookshelves.keyword", size: 20 },
-      },
-      authors: {
-        terms: { field: "author_names.keyword", size: 20 },
-      },
-      languages: {
-        terms: { field: "languages", size: 20 },
-      },
-      media_type: {
-        terms: { field: "media_type", size: 10 },
-      },
-      copyright: {
-        terms: { field: "copyright" },
-      },
-      download_count_stats: {
-        stats: { field: "download_count" },
-      },
-      popularity: {
-        range: {
-          field: "download_count",
-          ranges: [
-            { key: "low", to: 100 },
-            { key: "moderate", from: 100, to: 1000 },
-            { key: "popular", from: 1000, to: 10000 },
-            { key: "very_popular", from: 10000 },
-          ],
-        },
-      },
-      author_era: {
-        histogram: { field: "author_birth_years", interval: 100 },
-      },
-    },
+    };
+  } else {
+    queryBody = boolQuery;
+  }
+
+  // --- build aggregations from config ---
+  var aggs = {};
+  config.aggregations.forEach(function (agg) {
+    if (agg.type === "terms") {
+      aggs[agg.name] = { terms: { field: agg.field } };
+      if (agg.size) aggs[agg.name].terms.size = agg.size;
+    } else if (agg.type === "range") {
+      aggs[agg.name] = {
+        range: { field: agg.field, ranges: agg.ranges },
+      };
+    } else if (agg.type === "histogram") {
+      aggs[agg.name] = {
+        histogram: { field: agg.field, interval: agg.filterInterval },
+      };
+    }
+  });
+
+  var body = {
+    size: k,
+    query: queryBody,
+    _source: { excludes: config.query.sourceExcludes || [] },
+    aggs: aggs,
   };
+
+  // --- apply filter clauses from sidebar selections ---
+  var filterClauses = [];
+
+  config.aggregations.forEach(function (agg) {
+    var vals = filters[agg.name];
+    if (!vals || !vals.length) return;
+
+    var filterField = agg.filterField || agg.field;
+
+    if (agg.type === "terms") {
+      var coerced = vals;
+      if (agg.valueType === "boolean") {
+        coerced = vals.map(function (v) {
+          return v === "true";
+        });
+      }
+      filterClauses.push({ terms: { [filterField]: coerced } });
+    } else if (agg.type === "range" && agg.filterRanges) {
+      var rangeShould = vals
+        .filter(function (k) {
+          return agg.filterRanges[k];
+        })
+        .map(function (k) {
+          return { range: { [filterField]: agg.filterRanges[k] } };
+        });
+      if (rangeShould.length) {
+        filterClauses.push({
+          bool: { should: rangeShould, minimum_should_match: 1 },
+        });
+      }
+    } else if (agg.type === "histogram") {
+      var interval = agg.filterInterval;
+      var histShould = vals
+        .map(function (v) {
+          return parseInt(v, 10);
+        })
+        .filter(function (n) {
+          return !isNaN(n);
+        })
+        .map(function (start) {
+          return {
+            range: { [filterField]: { gte: start, lt: start + interval } },
+          };
+        });
+      if (histShould.length) {
+        filterClauses.push({
+          bool: { should: histShould, minimum_should_match: 1 },
+        });
+      }
+    }
+  });
+
+  // --- attach filters to the bool query ---
+  if (filterClauses.length) {
+    if (config.query.scoreFunction) {
+      body.query.function_score.query.bool.filter = filterClauses;
+    } else {
+      body.query.bool.filter = filterClauses;
+    }
+  }
 
   return body;
 };
 
-const search = async function (collection, querystring, k) {
-  const body = getQuery(querystring, k);
+const search = async function (config, querystring, k, filters, from) {
+  const body = getQuery(config, querystring, k, filters);
+  body.from = from || 0;
   const resp = await client.search({
-    index: collection,
+    index: config.index,
     body: body,
   });
-  console.log(JSON.stringify(resp, null, 2));
   return resp;
 };
 
