@@ -320,12 +320,17 @@ async function runAgentLoop(query, emit, isAborted) {
       return;
     }
 
-    var toolNames = assistantMsg.tool_calls.map(function (tc) { return tc.function.name; });
+    var toolCalls = assistantMsg.tool_calls.map(function (tc) {
+      var args;
+      try { args = JSON.parse(tc.function.arguments); } catch (e) { args = {}; }
+      return { name: tc.function.name, args: args };
+    });
     emit("progress", {
       turn: turn + 1,
       maxTurns: MAX_TURNS,
       status: "tools",
-      tools: toolNames,
+      tools: toolCalls.map(function (t) { return t.name; }),
+      toolCalls: toolCalls,
     });
 
     var results = await Promise.all(assistantMsg.tool_calls.map(executeToolCall));

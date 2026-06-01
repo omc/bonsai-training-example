@@ -99,10 +99,17 @@
           progressText.textContent = 'Turn ' + data.turn + '/' + data.maxTurns + ' — thinking...';
         } else if (data.status === 'tools') {
           progressText.textContent = 'Turn ' + data.turn + '/' + data.maxTurns + ' — calling tools...';
-          var entry = document.createElement('div');
-          entry.className = 'log-entry';
-          entry.textContent = 'Turn ' + data.turn + ': ' + data.tools.join(', ');
-          progressLog.appendChild(entry);
+          var calls = data.toolCalls || data.tools.map(function(n) { return {name: n}; });
+          calls.forEach(function(tc) {
+            var entry = document.createElement('div');
+            entry.className = 'log-entry';
+            var label = tc.name;
+            if (tc.args && tc.args.query) label += '("' + tc.args.query + '")';
+            else if (tc.args && tc.args.id) label += '(' + tc.args.id + ')';
+            else if (tc.args && tc.args.ids) label += '([' + tc.args.ids.join(', ') + '])';
+            entry.textContent = 'Turn ' + data.turn + ': ' + label;
+            progressLog.appendChild(entry);
+          });
         }
       });
 
