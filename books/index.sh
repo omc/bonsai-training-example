@@ -3,7 +3,7 @@ curl -XDELETE "$BONSAI_URL/books"
 curl -XPUT "$BONSAI_URL/books" -H "Content-Type:application/json" --data-binary @books-index.json
 for i in ./bulk/books-*.ndjson
 do
-    curl -s -XPOST "$BONSAI_URL/_bulk" -H "Content-Type:application/x-ndjson" --data-binary @$i >> logs.ndjson
+    curl -s -XPOST "$BONSAI_URL/_bulk" -H "Content-Type:application/x-ndjson" --data-binary @$i >> logs2.ndjson
     echo $i
 done
 echo "Done!"

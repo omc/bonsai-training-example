@@ -55,6 +55,7 @@
       },
       "author_names": {
         "type": "text",
+        "analyzer": "analyze_english_precise",
         "fields": {
           "keyword": {
             "type": "keyword",
@@ -70,6 +71,7 @@
       },
       "editor_names": {
         "type": "text",
+        "analyzer": "analyze_english_precise",
         "fields": {
           "keyword": {
             "type": "keyword",
@@ -85,6 +87,7 @@
       },
       "translator_names": {
         "type": "text",
+        "analyzer": "analyze_english_precise",
         "fields": {
           "keyword": {
             "type": "keyword",

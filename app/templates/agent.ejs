@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bonsai Search &mdash; Books Agent</title>
+  <link rel="shortcut icon" type="image/x-icon" href="https://cdn.prod.website-files.com/63c81e4decde60c281417feb/63c81e4decde604e0c417ffb_Favicon.png" />
+  <link rel="apple-touch-icon" href="https://cdn.prod.website-files.com/63c81e4decde60c281417feb/63c81e4decde602edf417ffc_Webclip.png" />
+  <link href="/css/fonts.css" rel="stylesheet">
+  <link href="/css/agent.css" rel="stylesheet">
+</head>
+<body>
+  <div class="bg-wash" aria-hidden="true"></div>
+
+  <header class="app-header">
+    <div class="header-inner">
+      <a href="/"><img src="/img/logo.svg" width="100" height="28"></a>
+      <form class="search" id="agent-form" autocomplete="off" role="search">
+        <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/>
+          <path d="M20 20l-3.5-3.5"/>
+        </svg>
+        <input name="q" type="text" aria-label="Search" placeholder="Ask the Books Agent..." value="<%= query %>" />
+      </form>
+      <a href="/books/" class="back-link">Standard Search</a>
+    </div>
+  </header>
+
+  <div class="agent-container">
+    <div id="progress" class="progress-area" style="display:none;">
+      <div class="progress-header">
+        <div class="spinner"></div>
+        <span id="progress-text">Searching...</span>
+      </div>
+      <div id="progress-log" class="progress-log"></div>
+    </div>
+
+    <div id="error" class="error-area" style="display:none;"></div>
+
+    <main id="results" class="results" style="display:none;"></main>
+
+    <div id="landing" class="landing">
+      <p class="landing-text">Ask a complex research question and the agent will iteratively search, read, and rank books to find the best results.</p>
+      <div class="landing-examples">
+        <button type="button" class="example-btn" data-query="Books about time travel written by British authors">Time travel by British authors</button>
+        <button type="button" class="example-btn" data-query="Gothic horror novels set in castles">Gothic horror in castles</button>
+        <button type="button" class="example-btn" data-query="Philosophy books about ethics and morality written before 1900">Pre-1900 ethics philosophy</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="app-footer">
+    <div class="footer-row">
+      <div>&copy; 2026 Bonsai</div>
+      <div class="links">
+        <a href="https://bonsai.io/">About</a>
+        <a href="https://bonsai.io/privacy">Privacy</a>
+        <a href="https://bonsai.io/terms">Terms</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    var form = document.getElementById('agent-form');
+    var input = form.querySelector('input[name="q"]');
+    var progressArea = document.getElementById('progress');
+    var progressText = document.getElementById('progress-text');
+    var progressLog = document.getElementById('progress-log');
+    var errorArea = document.getElementById('error');
+    var resultsArea = document.getElementById('results');
+    var landing = document.getElementById('landing');
+    var currentSource = null;
+
+    function reset() {
+      if (currentSource) { currentSource.close(); currentSource = null; }
+      progressArea.style.display = 'none';
+      errorArea.style.display = 'none';
+      resultsArea.style.display = 'none';
+      resultsArea.innerHTML = '';
+      progressLog.innerHTML = '';
+      errorArea.textContent = '';
+    }
+
+    function runQuery(q) {
+      if (!q.trim()) return;
+      reset();
+      landing.style.display = 'none';
+      progressArea.style.display = 'block';
+      progressText.textContent = 'Starting agent...';
+      input.value = q;
+
+      var url = '/books/agent/stream?q=' + encodeURIComponent(q);
+      var source = new EventSource(url);
+      currentSource = source;
+
+      source.addEventListener('progress', function(e) {
+        var data = JSON.parse(e.data);
+        if (data.status === 'thinking') {
+          progressText.textContent = 'Turn ' + data.turn + '/' + data.maxTurns + ' — thinking...';
+        } else if (data.status === 'tools') {
+          progressText.textContent = 'Turn ' + data.turn + '/' + data.maxTurns + ' — calling tools...';
+          var entry = document.createElement('div');
+          entry.className = 'log-entry';
+          entry.textContent = 'Turn ' + data.turn + ': ' + data.tools.join(', ');
+          progressLog.appendChild(entry);
+        }
+      });
+
+      source.addEventListener('results', function(e) {
+        var data = JSON.parse(e.data);
+        source.close();
+        currentSource = null;
+        progressArea.style.display = 'none';
+        renderResults(data.books);
+      });
+
+      source.addEventListener('error_event', function(e) {
+        var data = JSON.parse(e.data);
+        source.close();
+        currentSource = null;
+        progressArea.style.display = 'none';
+        errorArea.style.display = 'block';
+        errorArea.textContent = data.message || 'An error occurred.';
+      });
+
+      source.onerror = function() {
+        if (source.readyState === EventSource.CLOSED) return;
+        source.close();
+        currentSource = null;
+        progressArea.style.display = 'none';
+        errorArea.style.display = 'block';
+        errorArea.textContent = 'Connection lost. Please try again.';
+      };
+    }
+
+    function esc(s) {
+      var d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function renderResults(books) {
+      if (!books || !books.length) {
+        resultsArea.style.display = 'block';
+        resultsArea.innerHTML = '<p class="no-results">No relevant books found.</p>';
+        return;
+      }
+      resultsArea.style.display = 'block';
+      var html = '<div class="results-header">' + books.length + ' result' + (books.length !== 1 ? 's' : '') + ' ranked by relevance</div>';
+      books.forEach(function(book, i) {
+        html += '<article class="result">';
+        html += '<div class="rank">' + (i + 1) + '</div>';
+        html += '<div class="thumb" aria-hidden="true"><img src="' + esc(book.img) + '"></div>';
+        html += '<div class="result-body">';
+        html += '<div class="meta-row">';
+        book.subtitles.forEach(function(s, j) {
+          if (j > 0) html += '<span class="meta-sep">&middot;</span>';
+          html += '<span>' + esc(s) + '</span>';
+        });
+        html += '</div>';
+        html += '<h3><a href="' + esc(book.link) + '">' + esc(book.title) + '</a></h3>';
+        if (book.snippet) html += '<p class="snippet">' + esc(book.snippet) + '</p>';
+        if (book.tags && book.tags.length) {
+          html += '<div class="result-tags">';
+          book.tags.forEach(function(t) { html += '<span class="tag">' + esc(t) + '</span>'; });
+          html += '</div>';
+        }
+        html += '</div></article>';
+      });
+      resultsArea.innerHTML = html;
+    }
+
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      runQuery(input.value);
+    });
+
+    document.querySelectorAll('.example-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        runQuery(btn.getAttribute('data-query'));
+      });
+    });
+
+    // If URL has a query, run it on load
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('q')) {
+      runQuery(params.get('q'));
+    }
+  </script>
+</body>
+</html>
