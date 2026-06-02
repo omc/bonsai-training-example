@@ -37,7 +37,10 @@
 
     <div id="error" class="error-area" style="display:none;"></div>
 
-    <main id="results" class="results" style="display:none;"></main>
+    <div id="results-layout" class="layout" style="display:none;">
+      <aside id="workflow" class="workflow-sidebar"></aside>
+      <main id="results" class="results"></main>
+    </div>
 
     <div id="landing" class="landing">
       <p class="landing-text">Ask a complex research question and the agent will iteratively search, read, and rank books to find the best results.</p>
@@ -67,18 +70,23 @@
     var progressText = document.getElementById('progress-text');
     var progressLog = document.getElementById('progress-log');
     var errorArea = document.getElementById('error');
+    var resultsLayout = document.getElementById('results-layout');
     var resultsArea = document.getElementById('results');
+    var workflowSidebar = document.getElementById('workflow');
     var landing = document.getElementById('landing');
     var currentSource = null;
+    var toolHistory = []; // [{turn, calls: [{name, args}]}]
 
     function reset() {
       if (currentSource) { currentSource.close(); currentSource = null; }
       progressArea.style.display = 'none';
       errorArea.style.display = 'none';
-      resultsArea.style.display = 'none';
+      resultsLayout.style.display = 'none';
       resultsArea.innerHTML = '';
+      workflowSidebar.innerHTML = '';
       progressLog.innerHTML = '';
       errorArea.textContent = '';
+      toolHistory = [];
     }
 
     function runQuery(q) {
@@ -100,14 +108,11 @@
         } else if (data.status === 'tools') {
           progressText.textContent = 'Turn ' + data.turn + '/' + data.maxTurns + ' — calling tools...';
           var calls = data.toolCalls || data.tools.map(function(n) { return {name: n}; });
+          toolHistory.push({ turn: data.turn, calls: calls });
           calls.forEach(function(tc) {
             var entry = document.createElement('div');
             entry.className = 'log-entry';
-            var label = tc.name;
-            if (tc.args && tc.args.query) label += '("' + tc.args.query + '")';
-            else if (tc.args && tc.args.id) label += '(' + tc.args.id + ')';
-            else if (tc.args && tc.args.ids) label += '([' + tc.args.ids.join(', ') + '])';
-            entry.textContent = 'Turn ' + data.turn + ': ' + label;
+            entry.textContent = 'Turn ' + data.turn + ': ' + formatToolLabel(tc);
             progressLog.appendChild(entry);
           });
         }
@@ -118,7 +123,9 @@
         source.close();
         currentSource = null;
         progressArea.style.display = 'none';
+        renderWorkflow(data.ids);
         renderResults(data.books);
+        resultsLayout.style.display = 'grid';
       });
 
       source.addEventListener('error_event', function(e) {
@@ -146,13 +153,66 @@
       return d.innerHTML;
     }
 
+    var TOOL_ICONS = {
+      search: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
+      text_search: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h6"/><circle cx="19" cy="17" r="3"/><path d="M22 22l-1.5-1.5"/></svg>',
+      read: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>',
+      report_helpful_ids: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>'
+    };
+
+    function formatToolLabel(tc) {
+      var label = tc.name;
+      if (tc.args && tc.args.query) label += '("' + tc.args.query + '")';
+      else if (tc.args && tc.args.id) label += '(' + tc.args.id + ')';
+      else if (tc.args && tc.args.ids) label += '([' + tc.args.ids.join(', ') + '])';
+      return label;
+    }
+
+    function renderWorkflow(reportedIds) {
+      var html = '<h2>Agent Workflow</h2>';
+      toolHistory.forEach(function(turn, ti) {
+        var isLast = ti === toolHistory.length - 1;
+        html += '<div class="wf-turn' + (isLast ? ' wf-turn-last' : '') + '">';
+        html += '<div class="wf-turn-label">Turn ' + turn.turn + '</div>';
+        turn.calls.forEach(function(tc) {
+          var icon = TOOL_ICONS[tc.name] || '';
+          html += '<div class="wf-step">';
+          html += '<div class="wf-step-icon">' + icon + '</div>';
+          html += '<div class="wf-step-body">';
+          html += '<div class="wf-step-name">' + esc(tc.name) + '</div>';
+          if (tc.args && tc.args.query) {
+            html += '<div class="wf-step-detail">' + esc(tc.args.query) + '</div>';
+          } else if (tc.args && tc.args.id) {
+            html += '<div class="wf-step-detail">ID: ' + esc(tc.args.id) + '</div>';
+          } else if (tc.args && tc.args.ids) {
+            html += '<div class="wf-step-detail">' + tc.args.ids.length + ' book' + (tc.args.ids.length !== 1 ? 's' : '') + ' ranked</div>';
+          }
+          if (tc.args && tc.args.limit) {
+            html += '<div class="wf-step-meta">limit: ' + tc.args.limit + '</div>';
+          }
+          html += '</div></div>';
+        });
+        html += '</div>';
+      });
+      // Final report step
+      if (reportedIds && reportedIds.length) {
+        html += '<div class="wf-turn wf-turn-last">';
+        html += '<div class="wf-turn-label">Result</div>';
+        html += '<div class="wf-step wf-step-final">';
+        html += '<div class="wf-step-icon">' + (TOOL_ICONS.report_helpful_ids || '') + '</div>';
+        html += '<div class="wf-step-body">';
+        html += '<div class="wf-step-name">report_helpful_ids</div>';
+        html += '<div class="wf-step-detail">' + reportedIds.length + ' book' + (reportedIds.length !== 1 ? 's' : '') + ' returned</div>';
+        html += '</div></div></div>';
+      }
+      workflowSidebar.innerHTML = html;
+    }
+
     function renderResults(books) {
       if (!books || !books.length) {
-        resultsArea.style.display = 'block';
         resultsArea.innerHTML = '<p class="no-results">No relevant books found.</p>';
         return;
       }
-      resultsArea.style.display = 'block';
       var html = '<div class="results-header">' + books.length + ' result' + (books.length !== 1 ? 's' : '') + ' ranked by relevance</div>';
       books.forEach(function(book, i) {
         html += '<article class="result">';
