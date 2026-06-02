@@ -146,10 +146,15 @@ async function toolSearch(query, limit) {
       },
     });
     var hits = resp.body.hits.hits;
-    if (!hits.length) return "No documents matched the query. Try different search terms.";
-    return formatDocsXml(hitsToSnippetDocs(hits));
+    var total = resp.body.hits.total;
+    var totalCount = (typeof total === "object") ? total.value : total;
+    var took = resp.body.took;
+    var topIds = hits.map(function (h) { return String(h._source.gutenberg_id); });
+    var meta = { totalHits: totalCount, tookMs: took, topIds: topIds };
+    if (!hits.length) return { text: "No documents matched the query. Try different search terms.", meta: meta };
+    return { text: formatDocsXml(hitsToSnippetDocs(hits)), meta: meta };
   } catch (err) {
-    return "Search error: " + err.message;
+    return { text: "Search error: " + err.message, meta: null };
   }
 }
 
@@ -171,10 +176,15 @@ async function toolTextSearch(query, limit) {
       },
     });
     var hits = resp.body.hits.hits;
-    if (!hits.length) return "No documents matched the query. Try broader or different search terms.";
-    return formatDocsXml(hitsToSnippetDocs(hits));
+    var total = resp.body.hits.total;
+    var totalCount = (typeof total === "object") ? total.value : total;
+    var took = resp.body.took;
+    var topIds = hits.map(function (h) { return String(h._source.gutenberg_id); });
+    var meta = { totalHits: totalCount, tookMs: took, topIds: topIds };
+    if (!hits.length) return { text: "No documents matched the query. Try broader or different search terms.", meta: meta };
+    return { text: formatDocsXml(hitsToSnippetDocs(hits)), meta: meta };
   } catch (err) {
-    return "Search error: " + err.message + ". Check query syntax — this tool supports Lucene query syntax.";
+    return { text: "Search error: " + err.message + ". Check query syntax — this tool supports Lucene query syntax.", meta: null };
   }
 }
 
@@ -239,16 +249,16 @@ async function executeToolCall(tc) {
   }
 
   if (name === "search") {
-    var text = await toolSearch(args.query, args.limit);
-    return { toolCallId: tc.id, name: name, args: args, text: text, shouldStop: false };
+    var result = await toolSearch(args.query, args.limit);
+    return { toolCallId: tc.id, name: name, args: args, text: result.text, meta: result.meta, shouldStop: false };
   }
   if (name === "text_search") {
-    var text = await toolTextSearch(args.query, args.limit);
-    return { toolCallId: tc.id, name: name, args: args, text: text, shouldStop: false };
+    var result = await toolTextSearch(args.query, args.limit);
+    return { toolCallId: tc.id, name: name, args: args, text: result.text, meta: result.meta, shouldStop: false };
   }
   if (name === "read") {
     var text = await toolRead(args.id);
-    return { toolCallId: tc.id, name: name, args: args, text: text, shouldStop: false };
+    return { toolCallId: tc.id, name: name, args: args, text: text, meta: null, shouldStop: false };
   }
   if (name === "report_helpful_ids") {
     return { toolCallId: tc.id, name: name, args: args, text: JSON.stringify(args.ids), shouldStop: true };
@@ -336,6 +346,13 @@ async function runAgentLoop(query, emit, isAborted) {
     var results = await Promise.all(assistantMsg.tool_calls.map(executeToolCall));
 
     if (isAborted()) return;
+
+    emit("tool_results", {
+      turn: turn + 1,
+      calls: results.map(function (r) {
+        return { name: r.name, args: r.args, meta: r.meta || null };
+      }),
+    });
 
     var lastToolMessage = null;
     for (var i = 0; i < results.length; i++) {

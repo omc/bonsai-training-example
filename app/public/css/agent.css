@@ -268,6 +268,17 @@ header.app-header {
     color: var(--muted-2);
     margin-top: 2px;
 }
+.wf-step-ids {
+    display: flex; gap: 4px; flex-wrap: wrap;
+    margin-top: 4px;
+}
+.wf-id-chip {
+    font: 10px/1 ui-monospace, 'SFMono-Regular', Menlo, monospace;
+    color: var(--muted);
+    background: var(--green-faint);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
 
 /* Results */
 main.results { min-width: 0; }

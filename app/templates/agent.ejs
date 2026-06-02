@@ -97,6 +97,7 @@
       progressText.textContent = 'Starting agent...';
       input.value = q;
 
+      var startTime = Date.now();
       var url = '/books/agent/stream?q=' + encodeURIComponent(q);
       var source = new EventSource(url);
       currentSource = source;
@@ -118,13 +119,29 @@
         }
       });
 
+      source.addEventListener('tool_results', function(e) {
+        var data = JSON.parse(e.data);
+        // Merge meta into the matching toolHistory entry
+        for (var i = toolHistory.length - 1; i >= 0; i--) {
+          if (toolHistory[i].turn === data.turn) {
+            data.calls.forEach(function(c, j) {
+              if (toolHistory[i].calls[j]) {
+                toolHistory[i].calls[j].meta = c.meta;
+              }
+            });
+            break;
+          }
+        }
+      });
+
       source.addEventListener('results', function(e) {
         var data = JSON.parse(e.data);
         source.close();
         currentSource = null;
         progressArea.style.display = 'none';
+        var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
         renderWorkflow(data.ids);
-        renderResults(data.books);
+        renderResults(data.books, elapsed);
         resultsLayout.style.display = 'grid';
       });
 
@@ -187,8 +204,21 @@
           } else if (tc.args && tc.args.ids) {
             html += '<div class="wf-step-detail">' + tc.args.ids.length + ' book' + (tc.args.ids.length !== 1 ? 's' : '') + ' ranked</div>';
           }
-          if (tc.args && tc.args.limit) {
-            html += '<div class="wf-step-meta">limit: ' + tc.args.limit + '</div>';
+          var metaParts = [];
+          if (tc.args && tc.args.limit) metaParts.push('limit: ' + tc.args.limit);
+          if (tc.meta) {
+            metaParts.push(tc.meta.totalHits.toLocaleString() + ' hits');
+            metaParts.push(tc.meta.tookMs + 'ms');
+          }
+          if (metaParts.length) {
+            html += '<div class="wf-step-meta">' + esc(metaParts.join(' · ')) + '</div>';
+          }
+          if (tc.meta && tc.meta.topIds && tc.meta.topIds.length) {
+            html += '<div class="wf-step-ids">';
+            tc.meta.topIds.forEach(function(id) {
+              html += '<span class="wf-id-chip">' + esc(id) + '</span>';
+            });
+            html += '</div>';
           }
           html += '</div></div>';
         });
@@ -208,12 +238,12 @@
       workflowSidebar.innerHTML = html;
     }
 
-    function renderResults(books) {
+    function renderResults(books, elapsed) {
       if (!books || !books.length) {
         resultsArea.innerHTML = '<p class="no-results">No relevant books found.</p>';
         return;
       }
-      var html = '<div class="results-header">' + books.length + ' result' + (books.length !== 1 ? 's' : '') + ' ranked by relevance</div>';
+      var html = '<div class="results-header">' + books.length + ' result' + (books.length !== 1 ? 's' : '') + ' ranked by relevance in ' + elapsed + ' seconds</div>';
       books.forEach(function(book, i) {
         html += '<article class="result">';
         html += '<div class="rank">' + (i + 1) + '</div>';
