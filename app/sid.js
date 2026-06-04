@@ -649,6 +649,7 @@ async function runAgentLoop(query, emit, isAborted) {
   ];
 
   var reportedIds = null;
+  var totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
   for (var turn = 0; turn < MAX_TURNS; turn++) {
     if (isAborted()) return;
@@ -677,6 +678,19 @@ async function runAgentLoop(query, emit, isAborted) {
 
     var assistantMsg = response.choices[0].message;
     messages.push(assistantMsg);
+
+    // Extract token usage from this turn's API response
+    var turnUsage = null;
+    if (response.usage) {
+      turnUsage = {
+        promptTokens: response.usage.prompt_tokens || 0,
+        completionTokens: response.usage.completion_tokens || 0,
+        totalTokens: response.usage.total_tokens || 0,
+      };
+      totalUsage.promptTokens += turnUsage.promptTokens;
+      totalUsage.completionTokens += turnUsage.completionTokens;
+      totalUsage.totalTokens += turnUsage.totalTokens;
+    }
 
     // SID-1 should always return tool calls — no tool calls is an error
     if (!assistantMsg.tool_calls || !assistantMsg.tool_calls.length) {
@@ -714,9 +728,10 @@ async function runAgentLoop(query, emit, isAborted) {
 
     if (isAborted()) return;
 
-    // Emit post-execution metadata (totalHits, tookMs, topIds) for the workflow sidebar
+    // Emit post-execution metadata (totalHits, tookMs, topIds, token usage) for the workflow sidebar
     emit("tool_results", {
       turn: turn + 1,
+      usage: turnUsage,
       calls: results.map(function (r) {
         return { name: r.name, args: r.args, meta: r.meta || null };
       }),
@@ -798,7 +813,7 @@ async function runAgentLoop(query, emit, isAborted) {
     };
   });
 
-  emit("results", { books: displayBooks, ids: reportedIds });
+  emit("results", { books: displayBooks, ids: reportedIds, usage: totalUsage });
 }
 
 module.exports = { runAgentLoop };

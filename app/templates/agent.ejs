@@ -121,9 +121,10 @@
 
       source.addEventListener('tool_results', function(e) {
         var data = JSON.parse(e.data);
-        // Merge meta into the matching toolHistory entry
+        // Merge meta and usage into the matching toolHistory entry
         for (var i = toolHistory.length - 1; i >= 0; i--) {
           if (toolHistory[i].turn === data.turn) {
+            if (data.usage) toolHistory[i].usage = data.usage;
             data.calls.forEach(function(c, j) {
               if (toolHistory[i].calls[j]) {
                 toolHistory[i].calls[j].meta = c.meta;
@@ -140,8 +141,8 @@
         currentSource = null;
         progressArea.style.display = 'none';
         var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-        renderWorkflow(data.ids);
-        renderResults(data.books, elapsed);
+        renderWorkflow(data.ids, data.usage);
+        renderResults(data.books, elapsed, data.usage);
         resultsLayout.style.display = 'grid';
       });
 
@@ -185,12 +186,16 @@
       return label;
     }
 
-    function renderWorkflow(reportedIds) {
+    function renderWorkflow(reportedIds, totalUsage) {
       var html = '<h2>Agent Workflow</h2>';
       toolHistory.forEach(function(turn, ti) {
         var isLast = ti === toolHistory.length - 1;
         html += '<div class="wf-turn' + (isLast ? ' wf-turn-last' : '') + '">';
-        html += '<div class="wf-turn-label">Turn ' + turn.turn + '</div>';
+        html += '<div class="wf-turn-label">Turn ' + turn.turn;
+        if (turn.usage) {
+          html += '<span class="wf-turn-tokens">' + turn.usage.promptTokens.toLocaleString() + ' in · ' + turn.usage.completionTokens.toLocaleString() + ' out</span>';
+        }
+        html += '</div>';
         turn.calls.forEach(function(tc) {
           var icon = TOOL_ICONS[tc.name] || '';
           html += '<div class="wf-step">';
@@ -235,15 +240,26 @@
         html += '<div class="wf-step-detail">' + reportedIds.length + ' book' + (reportedIds.length !== 1 ? 's' : '') + ' returned</div>';
         html += '</div></div></div>';
       }
+      if (totalUsage && totalUsage.totalTokens) {
+        html += '<div class="wf-usage-summary">';
+        html += '<span class="wf-usage-label">Total tokens</span>';
+        html += '<span class="wf-usage-value">' + totalUsage.totalTokens.toLocaleString() + '</span>';
+        html += '<span class="wf-usage-breakdown">' + totalUsage.promptTokens.toLocaleString() + ' input · ' + totalUsage.completionTokens.toLocaleString() + ' output</span>';
+        html += '</div>';
+      }
       workflowSidebar.innerHTML = html;
     }
 
-    function renderResults(books, elapsed) {
+    function renderResults(books, elapsed, usage) {
       if (!books || !books.length) {
         resultsArea.innerHTML = '<p class="no-results">No relevant books found.</p>';
         return;
       }
-      var html = '<div class="results-header">' + books.length + ' result' + (books.length !== 1 ? 's' : '') + ' ranked by relevance in ' + elapsed + ' seconds</div>';
+      var headerText = books.length + ' result' + (books.length !== 1 ? 's' : '') + ' ranked by relevance in ' + elapsed + ' seconds';
+      if (usage && usage.totalTokens) {
+        headerText += ' · ' + usage.totalTokens.toLocaleString() + ' tokens';
+      }
+      var html = '<div class="results-header">' + headerText + '</div>';
       books.forEach(function(book, i) {
         html += '<article class="result">';
         html += '<div class="rank">' + (i + 1) + '</div>';
