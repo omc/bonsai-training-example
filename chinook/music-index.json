@@ -23,12 +23,12 @@
         "analyze_text": {
           "type": "custom",
           "tokenizer": "standard",
-          "filter": ["lowercase", "english_stop", "english_stem"]
+          "filter": ["lowercase", "asciifolding", "english_stop", "english_stem"]
         },
         "analyze_entities": {
           "type": "custom",
           "tokenizer": "standard",
-          "filter": ["lowercase", "english_light"]
+          "filter": ["lowercase", "asciifolding", "english_light"]
         },
         "analyze_urls": {
           "type": "custom",

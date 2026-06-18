@@ -108,7 +108,13 @@ app.get("/:dataset/search", async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const from = (page - 1) * perPage;
   console.log(JSON.stringify(req.query));
-  const results = await search(config, query, perPage, filters, from);
+  var permissions = null;
+  var role = req.query.role || null;
+  if (config.permissionPresets && role) {
+    var preset = config.permissionPresets.find(function (p) { return p.value === role; });
+    if (preset) permissions = preset.permissions;
+  }
+  const results = await search(config, query, perPage, filters, from, permissions);
   res.render("results", {
     query,
     results,
@@ -117,6 +123,7 @@ app.get("/:dataset/search", async (req, res) => {
     perPage,
     dataset,
     config,
+    role,
   });
 });
 

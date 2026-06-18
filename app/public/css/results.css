@@ -83,6 +83,20 @@ header.app-header {
 }
 .search input::placeholder { color: var(--muted); }
 
+.role-select {
+    flex: 0 0 auto;
+    font: 13px/1.4 var(--font-ui);
+    color: var(--ink-2);
+    background: var(--bg-tint);
+    border: 1px solid var(--line-2);
+    border-radius: 12px;
+    padding: 5px 10px;
+    outline: none;
+    cursor: pointer;
+    max-width: 220px;
+}
+.role-select:focus { border-color: var(--green); }
+
 .avatar {
     width: 36px; height: 36px; border-radius: 50%;
     background: linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%);

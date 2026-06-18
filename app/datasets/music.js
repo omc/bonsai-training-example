@@ -2,6 +2,16 @@ module.exports = {
   index: "music",
   label: "Music",
 
+  permissionPresets: [
+    { label: "Public", value: "public", permissions: ["all"] },
+    { label: "Andrew Adams – General Manager", value: "employee-1", permissions: ["all", "admin"] },
+    { label: "Jane Peacock – Sales Agent", value: "employee-3", permissions: ["all", "admin"] },
+    { label: "Michael Mitchell – IT Manager", value: "employee-6", permissions: ["all", "admin"] },
+    { label: "Luís Gonçalves", value: "customer-1", permissions: ["all", "customer-1"] },
+    { label: "Bjørn Hansen", value: "customer-4", permissions: ["all", "customer-4"] },
+    { label: "Helena Holý", value: "customer-6", permissions: ["all", "customer-6"] },
+  ],
+
   query: {
     clauses: [
       {

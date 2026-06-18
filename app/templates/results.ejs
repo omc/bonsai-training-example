@@ -21,6 +21,24 @@
           <path d="M20 20l-3.5-3.5"/>
         </svg>
         <input name="q" type="text" aria-label="Search" value="<%= query %>" />
+        <% if (config.permissionPresets) { %>
+        <select name="role" class="role-select" aria-label="Permission role" onchange="this.form.submit()">
+          <option value="">No permissions filter</option>
+          <optgroup label="Employees">
+            <% config.permissionPresets.filter(function(p) { return p.value.startsWith('employee-'); }).forEach(function(p) { %>
+            <option value="<%= p.value %>"<%= (typeof role !== 'undefined' && role === p.value) ? ' selected' : '' %>><%= p.label %></option>
+            <% }); %>
+          </optgroup>
+          <optgroup label="Customers">
+            <% config.permissionPresets.filter(function(p) { return p.value.startsWith('customer-'); }).forEach(function(p) { %>
+            <option value="<%= p.value %>"<%= (typeof role !== 'undefined' && role === p.value) ? ' selected' : '' %>><%= p.label %></option>
+            <% }); %>
+          </optgroup>
+          <% config.permissionPresets.filter(function(p) { return !p.value.startsWith('employee-') && !p.value.startsWith('customer-'); }).forEach(function(p) { %>
+          <option value="<%= p.value %>"<%= (typeof role !== 'undefined' && role === p.value) ? ' selected' : '' %>><%= p.label %></option>
+          <% }); %>
+        </select>
+        <% } %>
       </form>
     </div>
   </header>
@@ -74,7 +92,7 @@
       </div>
       <% }); %>
 
-      <a class="clear-btn" href="/<%= dataset %>/search?q=<%= encodeURIComponent(query) %>">Clear all filters</a>
+      <a class="clear-btn" href="/<%= dataset %>/search?q=<%= encodeURIComponent(query) %><%= (typeof role !== 'undefined' && role) ? '&role=' + encodeURIComponent(role) : '' %>">Clear all filters</a>
     </aside>
 
     <main class="results">
@@ -101,6 +119,7 @@
         if (totalPages > 1) {
           var baseParams = new URLSearchParams();
           baseParams.set('q', query);
+          if (typeof role !== 'undefined' && role) baseParams.set('role', role);
           var fKeys = Object.keys(f);
           fKeys.forEach(function(key) {
             [].concat(f[key]).forEach(function(val) {
@@ -174,6 +193,10 @@
       cb.addEventListener('change', function () {
         var params = new URLSearchParams();
         params.set('q', '<%= query.replace(/'/g, "\\'") %>');
+        var roleSelect = document.querySelector('.role-select');
+        if (roleSelect && roleSelect.value) {
+          params.set('role', roleSelect.value);
+        }
         document.querySelectorAll('.filters input[type="checkbox"]:checked').forEach(function (checked) {
           params.append(checked.name, checked.value);
         });

@@ -1,7 +1,7 @@
 const { Client } = require("@opensearch-project/opensearch");
 const client = new Client({ node: process.env.BONSAI_URL });
 
-const getQuery = function (config, querystring, k, filters) {
+const getQuery = function (config, querystring, k, filters, permissions) {
   k = k || 10;
   filters = filters || {};
 
@@ -70,8 +70,13 @@ const getQuery = function (config, querystring, k, filters) {
     aggs: aggs,
   };
 
-  // --- apply filter clauses from sidebar selections ---
+  // --- apply permissions filter ---
   var filterClauses = [];
+  if (permissions && permissions.length) {
+    filterClauses.push({ terms: { permissions: permissions } });
+  }
+
+  // --- apply filter clauses from sidebar selections ---
 
   config.aggregations.forEach(function (agg) {
     var vals = filters[agg.name];
@@ -134,8 +139,8 @@ const getQuery = function (config, querystring, k, filters) {
   return body;
 };
 
-const search = async function (config, querystring, k, filters, from) {
-  const body = getQuery(config, querystring, k, filters);
+const search = async function (config, querystring, k, filters, from, permissions) {
+  const body = getQuery(config, querystring, k, filters, permissions);
   body.from = from || 0;
   const resp = await client.search({
     index: config.index,
