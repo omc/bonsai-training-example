@@ -1,0 +1,29 @@
+<article class="result">
+  <div class="thumb" aria-hidden="true">
+    <img src="<%- img %>">
+  </div>
+  <div>
+    <div class="meta-row">
+      <% config.display.subtitleFields.forEach(function(sf, i) {
+        var val = sf.value(src);
+        if (val) { %>
+      <% if (i > 0) { %><span class="meta-sep">&middot;</span><% } %>
+      <span><%= val %></span>
+      <% }
+      }); %>
+    </div>
+    <h3><a href="<%= link %>"><%= title %></a></h3>
+    <% if (snippet) { %>
+    <p class="snippet"><%= snippet %></p>
+    <% } %>
+    <div class="result-tags">
+      <% config.display.tags.forEach(function(tagFn) {
+        var tagVal = tagFn(src);
+        var tagArr = [].concat(tagVal || []).filter(function(t) { return t != null; });
+        tagArr.forEach(function(t) { %>
+      <span class="tag"><%= t %></span>
+      <%   });
+      }); %>
+    </div>
+  </div>
+</article>

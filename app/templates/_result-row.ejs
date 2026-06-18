@@ -1,0 +1,29 @@
+<article class="result-row">
+  <div class="row-icon">
+    <%- (config.display.icons && config.display.icons[src.type]) || '' %>
+  </div>
+  <div class="row-body">
+    <div class="row-main">
+      <% if (link) { %>
+      <a class="row-name" href="<%= link %>"><%= title %></a>
+      <% } else { %>
+      <span class="row-name"><%= title %></span>
+      <% } %>
+      <% if (src.type) { %>
+      <span class="row-type"><%= src.type %></span>
+      <% } %>
+    </div>
+    <% var subs = [];
+       config.display.subtitleFields.forEach(function(sf) {
+         var val = sf.value(src);
+         if (val) subs.push(val);
+       });
+       if (subs.length) { %>
+    <div class="meta-row"><%- subs.join(' <span class="meta-sep">&middot;</span> ') %></div>
+    <% } %>
+    <% var detail = config.display.detailLine ? config.display.detailLine(src) : null;
+       if (detail) { %>
+    <div class="row-detail"><%= detail %></div>
+    <% } %>
+  </div>
+</article>
