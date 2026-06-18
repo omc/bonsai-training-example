@@ -26,7 +26,7 @@ const getQuery = function (config, querystring, k, filters) {
   }).filter(Boolean);
 
   // --- build core bool query ---
-  var boolQuery = { bool: { should: shouldClauses } };
+  var boolQuery = { bool: { should: shouldClauses, minimum_should_match: 1 } };
 
   // --- wrap in function_score if scoreFunction configured ---
   var queryBody;
