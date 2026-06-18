@@ -1,0 +1,64 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 2,
+    "analysis": {
+      "filter": {
+        "english_stop": { "type": "stop", "stopwords": "_english_" },
+        "english_stem": { "type": "stemmer", "language": "english" },
+        "english_light": { "type": "stemmer", "language": "possessive_english" }
+      },
+      "char_filter": {
+        "protocol_strip": {
+          "type": "pattern_replace",
+          "pattern": "^(http|https)(://)",
+          "replacement": ""
+        }
+      },
+      "tokenizer": {
+        "path_hierarchy_tokenizer": { "type": "path_hierarchy" },
+        "email_tokenizer": { "type": "uax_url_email" }
+      },
+      "analyzer": {
+        "analyze_text": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "filter": ["lowercase", "english_stop", "english_stem"]
+        },
+        "analyze_entities": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "filter": ["lowercase", "english_light"]
+        },
+        "analyze_urls": {
+          "type": "custom",
+          "char_filter": ["protocol_strip"],
+          "tokenizer": "path_hierarchy_tokenizer",
+          "filter": ["lowercase"]
+        },
+        "analyze_emails": {
+          "type": "custom",
+          "tokenizer": "email_tokenizer",
+          "filter": ["lowercase"]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "id":          { "type": "keyword" },
+      "type":        { "type": "keyword" },
+      "permissions": { "type": "keyword" },
+      "url":         { "type": "text", "analyzer": "analyze_urls" },
+      "names":       { "type": "text", "analyzer": "analyze_entities" },
+      "emails":      { "type": "text", "analyzer": "analyze_emails" },
+      "notes":       { "type": "text", "analyzer": "analyze_text" },
+      "aka":         { "type": "text", "analyzer": "analyze_entities" },
+      "address":     { "type": "text", "analyzer": "analyze_entities" },
+      "created":     { "type": "date" },
+      "updated":     { "type": "date" },
+      "deleted":     { "type": "date" },
+      "details":     { "type": "object", "enabled": false, "dynamic": true }
+    }
+  }
+}
