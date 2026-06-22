@@ -80,18 +80,21 @@ module.exports = {
       },
     ],
     detailLine: function (src) {
-      if (!src.details) return null;
       var parts = [];
-      if (src.details.price != null) parts.push("$" + src.details.price.toFixed(2));
-      if (src.details.duration_ms != null) {
-        var totalSec = Math.round(src.details.duration_ms / 1000);
-        var min = Math.floor(totalSec / 60);
-        var sec = totalSec % 60;
-        parts.push(min + ":" + (sec < 10 ? "0" : "") + sec);
+      if (src.amount != null) {
+        var dollars = (src.amount / 100).toFixed(2);
+        parts.push(src.type === "invoice" ? "Total: $" + dollars : "$" + dollars);
       }
-      if (src.details.media_type) parts.push(src.details.media_type);
-      if (src.details.total != null) parts.push("Total: $" + src.details.total.toFixed(2));
-      if (src.details.support_rep) parts.push("Rep: " + src.details.support_rep);
+      if (src.details) {
+        if (src.details.duration_ms != null) {
+          var totalSec = Math.round(src.details.duration_ms / 1000);
+          var min = Math.floor(totalSec / 60);
+          var sec = totalSec % 60;
+          parts.push(min + ":" + (sec < 10 ? "0" : "") + sec);
+        }
+        if (src.details.media_type) parts.push(src.details.media_type);
+        if (src.details.support_rep) parts.push("Rep: " + src.details.support_rep);
+      }
       return parts.length ? parts.join(" \u00b7 ") : null;
     },
     tags: [],

@@ -3,7 +3,7 @@ const path = require("path");
 
 const dataPath = path.join(
   __dirname,
-  "chinook-database/ChinookDatabase/DataSources/ChinookData.json"
+  "chinook-database/ChinookDatabase/DataSources/ChinookData.json",
 );
 const outPath = path.join(__dirname, "music.ndjson");
 
@@ -12,30 +12,30 @@ const data = JSON.parse(fs.readFileSync(dataPath, "utf-8"));
 // --- Lookup maps ---
 
 const genreById = Object.fromEntries(
-  data.Genre.map((g) => [g.GenreId, g.Name])
+  data.Genre.map((g) => [g.GenreId, g.Name]),
 );
 
 const mediaTypeById = Object.fromEntries(
-  data.MediaType.map((m) => [m.MediaTypeId, m.Name])
+  data.MediaType.map((m) => [m.MediaTypeId, m.Name]),
 );
 
 const artistById = Object.fromEntries(
-  data.Artist.map((a) => [a.ArtistId, a.Name])
+  data.Artist.map((a) => [a.ArtistId, a.Name]),
 );
 
 const albumById = Object.fromEntries(
-  data.Album.map((a) => [a.AlbumId, a.Title])
+  data.Album.map((a) => [a.AlbumId, a.Title]),
 );
 
 const customerById = Object.fromEntries(
   data.Customer.map((c) => [
     c.CustomerId,
     { name: `${c.FirstName} ${c.LastName}`, id: c.CustomerId },
-  ])
+  ]),
 );
 
 const employeeById = Object.fromEntries(
-  data.Employee.map((e) => [e.EmployeeId, `${e.FirstName} ${e.LastName}`])
+  data.Employee.map((e) => [e.EmployeeId, `${e.FirstName} ${e.LastName}`]),
 );
 
 // --- Helpers ---
@@ -95,12 +95,12 @@ for (const r of data.Track) {
     genreById[r.GenreId],
     r.Composer,
   ]);
+  if (r.UnitPrice != null) doc.amount = Math.round(r.UnitPrice * 100);
   const details = {};
   if (mediaTypeById[r.MediaTypeId])
     details.media_type = mediaTypeById[r.MediaTypeId];
   if (r.Milliseconds != null) details.duration_ms = r.Milliseconds;
   if (r.Bytes != null) details.size_bytes = r.Bytes;
-  if (r.UnitPrice != null) details.price = r.UnitPrice;
   if (Object.keys(details).length > 0) doc.details = details;
   emit(id, doc);
 }
@@ -173,9 +173,7 @@ for (const r of data.Invoice) {
     r.BillingPostalCode,
   ]);
   maybeSet(doc, "created", toISO(r.InvoiceDate));
-  const details = {};
-  if (r.Total != null) details.total = r.Total;
-  if (Object.keys(details).length > 0) doc.details = details;
+  if (r.Total != null) doc.amount = Math.round(r.Total * 100);
   emit(id, doc);
 }
 

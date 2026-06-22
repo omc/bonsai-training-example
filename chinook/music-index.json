@@ -23,7 +23,12 @@
         "analyze_text": {
           "type": "custom",
           "tokenizer": "standard",
-          "filter": ["lowercase", "asciifolding", "english_stop", "english_stem"]
+          "filter": [
+            "lowercase",
+            "asciifolding",
+            "english_stop",
+            "english_stem"
+          ]
         },
         "analyze_entities": {
           "type": "custom",
@@ -46,19 +51,20 @@
   },
   "mappings": {
     "properties": {
-      "id":          { "type": "keyword" },
-      "type":        { "type": "keyword" },
+      "id": { "type": "keyword" },
+      "type": { "type": "keyword" },
       "permissions": { "type": "keyword" },
-      "url":         { "type": "text", "analyzer": "analyze_urls" },
-      "names":       { "type": "text", "analyzer": "analyze_entities" },
-      "emails":      { "type": "text", "analyzer": "analyze_emails" },
-      "notes":       { "type": "text", "analyzer": "analyze_text" },
-      "aka":         { "type": "text", "analyzer": "analyze_entities" },
-      "address":     { "type": "text", "analyzer": "analyze_entities" },
-      "created":     { "type": "date" },
-      "updated":     { "type": "date" },
-      "deleted":     { "type": "date" },
-      "details":     { "type": "object", "enabled": false, "dynamic": true }
+      "url": { "type": "text", "analyzer": "analyze_urls" },
+      "names": { "type": "text", "analyzer": "analyze_entities" },
+      "emails": { "type": "text", "analyzer": "analyze_emails" },
+      "notes": { "type": "text", "analyzer": "analyze_text" },
+      "aka": { "type": "text", "analyzer": "analyze_entities" },
+      "address": { "type": "text", "analyzer": "analyze_entities" },
+      "amount": { "type": "long" },
+      "created": { "type": "date" },
+      "updated": { "type": "date" },
+      "deleted": { "type": "date" },
+      "details": { "type": "object", "enabled": false, "dynamic": true }
     }
   }
 }
