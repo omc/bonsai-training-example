@@ -83,6 +83,17 @@ app.get("/books/agent/stream", (req, res) => {
     });
 });
 
+app.get("/:dataset/count", async (req, res) => {
+  var config = configs[req.params.dataset];
+  if (!config) return res.status(404).send("Dataset not found");
+  try {
+    const resp = await client.count({ index: config.index });
+    res.json({ index: config.index, count: resp.body.count });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
 app.get("/:dataset", async (req, res) => {
   var config = configs[req.params.dataset];
   if (!config) return res.status(404).send("Dataset not found");
