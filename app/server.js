@@ -28,6 +28,16 @@ fs.readdirSync(datasetsDir)
     configs[name] = require(path.join(datasetsDir, f));
   });
 
+// --- Helpers ---
+async function getIndexCount(index) {
+  try {
+    var resp = await client.count({ index: index });
+    return resp.body.count;
+  } catch (e) {
+    return null;
+  }
+}
+
 // --- Static files ---
 app.use(express.static(path.join(__dirname, "public")));
 
@@ -100,7 +110,8 @@ app.get("/:dataset", async (req, res) => {
   var datasets = Object.keys(configs).map(function (key) {
     return { slug: key, label: configs[key].label };
   });
-  res.render("index", { dataset: req.params.dataset, config: config, datasets: datasets });
+  var indexCount = await getIndexCount(config.index);
+  res.render("index", { dataset: req.params.dataset, config: config, datasets: datasets, indexCount: indexCount });
 });
 
 app.get("/:dataset/search", async (req, res) => {
@@ -125,7 +136,10 @@ app.get("/:dataset/search", async (req, res) => {
     var preset = config.permissionPresets.find(function (p) { return p.value === role; });
     if (preset) permissions = preset.permissions;
   }
-  const results = await search(config, query, perPage, filters, from, permissions);
+  var [results, indexCount] = await Promise.all([
+    search(config, query, perPage, filters, from, permissions),
+    getIndexCount(config.index),
+  ]);
   res.render("results", {
     query,
     results,
@@ -135,6 +149,7 @@ app.get("/:dataset/search", async (req, res) => {
     dataset,
     config,
     role,
+    indexCount,
   });
 });
 

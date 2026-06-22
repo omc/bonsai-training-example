@@ -20,7 +20,7 @@
           <circle cx="11" cy="11" r="7"/>
           <path d="M20 20l-3.5-3.5"/>
         </svg>
-        <input name="q" type="text" aria-label="Search" value="<%= query %>" />
+        <input name="q" type="text" aria-label="Search" value="<%= query %>" placeholder="Search<%= (typeof indexCount !== 'undefined' && indexCount) ? ' ' + indexCount.toLocaleString() : '' %> <%= config.label %> entries..." />
         <% if (config.permissionPresets) { %>
         <select name="role" class="role-select" aria-label="Permission role" onchange="this.form.submit()">
           <option value="">No permissions filter</option>
