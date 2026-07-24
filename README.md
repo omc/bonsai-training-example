@@ -20,6 +20,12 @@ app/
     img/
       logo.svg            Bonsai brand logo
       book.svg            Fallback cover image
+  datasets/
+    books.js              Books dataset config (full-text + relevance tuning)
+    music.js              Music dataset config (Chinook data, permissions)
+    pictures.js           Pictures dataset config (multimodal kNN, grid layout)
+  templates/
+    _result-tile.ejs      Picture grid tile (image, similarity score, metadata)
   package.json            Dependencies: express 5.1, opensearch 3.5, ejs 5.0
   Procfile                Heroku start command
   app.json                Heroku deployment manifest
@@ -28,6 +34,10 @@ books/
   index.sh                Bash script to create index and bulk-load data
   bulk/                   32 sharded NDJSON files (books-00..books-31)
   books.ndjson            Combined bulk data (gitignored, download separately)
+pictures/
+  pictures-index.json     OpenSearch index mapping (kNN vector field)
+  index.sh                Bash script to create index and bulk-load images
+  pictures.ndjson         Bulk data: base64 images + 1152-dim embeddings
 render.yaml               Render.com deployment config
 flake.nix                 Nix dev shell (Node 24, eslint_d, prettierd)
 .envrc                    direnv: `use flake`
@@ -51,6 +61,11 @@ cp app/.env.example .env
 
 The app reads `BONSAI_URL` for the OpenSearch connection. `PORT` defaults to 4444.
 
+The **Pictures** dataset additionally needs an embedding service for multimodal
+search. It reads `EMBED_URL` (default `http://127.0.0.1:5100/embed`) — a service
+that accepts `POST {"inputs": "<text>"}` and returns a batch of vectors
+(`[[0.3, 1.9, ...]]`). See [Multimodal Image Search](#multimodal-image-search-pictures).
+
 ### Index the Data
 
 ```bash
@@ -60,6 +75,18 @@ bash index.sh
 ```
 
 This deletes any existing `books` index, creates a new one from `books-index.json`, then bulk-loads all 32 shard files from `bulk/`.
+
+To index the **Pictures** dataset:
+
+```bash
+cd pictures
+source ../.env
+bash index.sh
+```
+
+This recreates the `pictures` index and bulk-loads `pictures.ndjson`, splitting it
+into 100-line chunks (the file carries base64 images + 1152-dim vectors, so it is
+sent in smaller requests rather than one large payload).
 
 ### Run the App
 
@@ -78,10 +105,15 @@ cd app && npm install && npm run dev
 
 ## Routes
 
+Routes are parameterized by dataset (`books`, `music`, `pictures`). Each is driven
+by a config file in `app/datasets/`; adding a dataset means adding a config.
+
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/` | Landing page with search form |
-| GET | `/search?q=...` | Search results with filters and pagination |
+| GET | `/` | Redirects to `/books` |
+| GET | `/:dataset` | Landing page with search form (e.g. `/pictures`) |
+| GET | `/:dataset/search?q=...` | Search results (e.g. `/pictures/search?q=eiffel+tower`) |
+| GET | `/:dataset/count` | Document count for the dataset's index (JSON) |
 | GET | `/health` | OpenSearch cluster health (JSON) |
 
 ### Search Parameters
@@ -147,6 +179,39 @@ Every search request computes these facets (returned as sidebar filter counts):
 ### Pagination
 
 The server parses `?page=N`, computes `from = (page - 1) * 10`, and passes it to OpenSearch as `body.from`. The template renders a sliding window of up to 7 page numbers with prev/next arrows and ellipsis.
+
+## Multimodal Image Search (Pictures)
+
+The **Pictures** dataset (`/pictures`) does text-to-image search: you type a text
+query and get back a grid of visually similar images, ranked by vector similarity.
+No facets or filters.
+
+### Pipeline
+
+1. The query string is sent to the embedding service (`EMBED_URL`) as
+   `POST {"inputs": "<query>"}`, which returns a dense vector (`[[...]]`).
+2. `search.js` builds an OpenSearch `knn` query against the `emb` field
+   (1152-dim HNSW vector) with that vector.
+3. Hits carry `img` (base64 JPEG), `width`, `height`, and `path`. `emb` is
+   excluded from `_source` to keep responses small.
+4. `results.ejs` renders a responsive grid (max 4 tiles per row) of
+   `_result-tile.ejs` cards showing the image, its similarity score, dimensions,
+   and source folder.
+
+The dataset config lives in `app/datasets/pictures.js`
+(`query.type: "knn"`, `display.layout: "grid"`, `perPage: 20`). This is the same
+config-driven mechanism used by `books`/`music`; only the query type and display
+layout differ.
+
+### Pagination caveat
+
+Pagination "works" but is semantically loose for kNN. OpenSearch reports
+`hits.total` as the number of candidate docs matched across segments, not the
+top-k actually returned — so the displayed result count is a kNN artifact rather
+than a true match count. Each "page" is just a lower slice of the same ranked
+similarity list. Deep paging also requires `k >= from + size`, so later pages
+request larger candidate pools. For a top-k similarity demo, a fixed top-N view is
+arguably more honest than pagination.
 
 ## Index Schema
 

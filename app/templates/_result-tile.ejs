@@ -1,0 +1,27 @@
+<%
+  var title = config.display.titleValue(src);
+  var imgData = config.display.imageData(src);
+  var score = (hit._score != null) ? hit._score.toFixed(3) : null;
+%>
+<article class="pic-card">
+  <div class="pic-thumb">
+    <% if (imgData) { %>
+    <img src="<%- imgData %>" alt="<%= title %>" loading="lazy">
+    <% } %>
+    <% if (score != null) { %>
+    <span class="pic-score" title="Similarity score"><%= score %></span>
+    <% } %>
+  </div>
+  <div class="pic-body">
+    <h3 class="pic-title" title="<%= src.path || title %>"><%= title %></h3>
+    <div class="pic-meta">
+      <% config.display.metaFields.forEach(function(mf, i) {
+        var val = mf.value(src);
+        if (val) { %>
+      <% if (i > 0) { %><span class="meta-sep">&middot;</span><% } %>
+      <span><%= val %></span>
+      <% }
+      }); %>
+    </div>
+  </div>
+</article>

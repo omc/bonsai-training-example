@@ -1,6 +1,39 @@
 const { Client } = require("@opensearch-project/opensearch");
 const client = new Client({ node: process.env.BONSAI_URL });
 
+const EMBED_URL = process.env.EMBED_URL || "http://127.0.0.1:5100/embed";
+
+// Fetch a dense embedding for a text query from the embedding service.
+const getEmbedding = async function (text) {
+  const resp = await fetch(EMBED_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ inputs: text }),
+  });
+  if (!resp.ok) {
+    throw new Error("Embedding service returned " + resp.status);
+  }
+  const data = await resp.json();
+  // Service returns a batch: [[...vector...]]
+  return Array.isArray(data[0]) ? data[0] : data;
+};
+
+// Build a kNN vector-search body. `from`/`k` paginate; OpenSearch needs k >= from + size.
+const getKnnQuery = function (config, vector, size, from) {
+  var field = config.query.field;
+  var body = {
+    size: size,
+    from: from || 0,
+    query: {
+      knn: {
+        [field]: { vector: vector, k: (from || 0) + size },
+      },
+    },
+    _source: { excludes: config.query.sourceExcludes || [] },
+  };
+  return body;
+};
+
 const getQuery = function (config, querystring, k, filters, permissions) {
   k = k || 10;
   filters = filters || {};
@@ -140,8 +173,14 @@ const getQuery = function (config, querystring, k, filters, permissions) {
 };
 
 const search = async function (config, querystring, k, filters, from, permissions) {
-  const body = getQuery(config, querystring, k, filters, permissions);
-  body.from = from || 0;
+  var body;
+  if (config.query.type === "knn") {
+    const vector = await getEmbedding(querystring);
+    body = getKnnQuery(config, vector, k, from);
+  } else {
+    body = getQuery(config, querystring, k, filters, permissions);
+    body.from = from || 0;
+  }
   const resp = await client.search({
     index: config.index,
     body: body,

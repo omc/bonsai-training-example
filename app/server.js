@@ -126,7 +126,7 @@ app.get("/:dataset/search", async (req, res) => {
       filters[agg.name] = [].concat(req.query[agg.name]);
     }
   });
-  const perPage = 10;
+  const perPage = config.perPage || 10;
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const from = (page - 1) * perPage;
   console.log(JSON.stringify(req.query));
@@ -136,10 +136,14 @@ app.get("/:dataset/search", async (req, res) => {
     var preset = config.permissionPresets.find(function (p) { return p.value === role; });
     if (preset) permissions = preset.permissions;
   }
-  var [results, indexCount] = await Promise.all([
-    search(config, query, perPage, filters, from, permissions),
-    getIndexCount(config.index),
-  ]);
+  var indexCount = await getIndexCount(config.index);
+  var results;
+  if (query.trim()) {
+    results = await search(config, query, perPage, filters, from, permissions);
+  } else {
+    // Empty query: nothing to embed/match — render an empty result set.
+    results = { body: { hits: { hits: [], total: { value: 0 } }, took: 0, aggregations: {} } };
+  }
   res.render("results", {
     query,
     results,

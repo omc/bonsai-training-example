@@ -59,7 +59,9 @@
     <strong><%= totalCount.toLocaleString() %></strong> results <span class="meta-sep">&middot;</span> <%= (took / 1000).toFixed(2) %> seconds <span class="meta-sep">&middot;</span> for <em>&ldquo;<%= query %>&rdquo;</em>
   </div>
 
-  <div class="layout">
+  <% var isGrid = config.display.layout === 'grid'; %>
+  <div class="layout<%= isGrid ? ' layout-grid' : '' %>">
+    <% if (!isGrid && config.aggregations && config.aggregations.length) { %>
     <button class="filters-toggle" type="button" aria-expanded="false" aria-controls="filters-panel">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="12" y1="18" x2="20" y2="18"/></svg>
       Filters
@@ -94,12 +96,22 @@
 
       <a class="clear-btn" href="/<%= dataset %>/search?q=<%= encodeURIComponent(query) %><%= (typeof role !== 'undefined' && role) ? '&role=' + encodeURIComponent(role) : '' %>">Clear all filters</a>
     </aside>
+    <% } %>
 
     <main class="results">
       <% if (hits.length === 0) { %>
       <p>No results found for &ldquo;<%= query %>&rdquo;.</p>
       <% } %>
 
+      <% if (isGrid) { %>
+      <div class="picture-grid">
+        <% hits.forEach(function(hit) {
+          var src = hit._source;
+        %>
+        <%- include('_result-tile', { hit: hit, src: src, config: config }) %>
+        <% }); %>
+      </div>
+      <% } else { %>
       <% hits.forEach(function(hit) {
         var src = hit._source;
         var img = config.display.image ? (config.display.image(src) || config.display.imageFallback) : null;
@@ -113,6 +125,7 @@
       <%- include('_result-card', { hit: hit, src: src, title: title, link: link, img: img, snippet: snippet, config: config }) %>
       <% } %>
       <% }); %>
+      <% } %>
 
       <%
         var totalPages = Math.ceil(totalCount / perPage);

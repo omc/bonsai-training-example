@@ -398,3 +398,63 @@ span.row-name { color: var(--ink); }
     font-size: 13px; color: var(--muted);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* ---- Pictures: multimodal grid ---- */
+.layout-grid { grid-template-columns: 1fr; }
+
+.picture-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+}
+
+.pic-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: var(--shadow-1);
+    display: flex; flex-direction: column;
+    transition: box-shadow .2s ease, transform .2s ease;
+}
+.pic-card:hover { box-shadow: var(--shadow-2); transform: translateY(-2px); }
+
+.pic-thumb {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    background: var(--bg-tint);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+}
+.pic-thumb img {
+    width: 100%; height: 100%;
+    object-fit: contain;
+    display: block;
+}
+.pic-score {
+    position: absolute; top: 8px; right: 8px;
+    font-size: 11px; font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: #fff;
+    background: color-mix(in oklab, var(--green-deep) 82%, transparent);
+    padding: 3px 8px; border-radius: 999px;
+    backdrop-filter: blur(4px);
+}
+
+.pic-body { padding: 10px 12px 12px; }
+.pic-title {
+    margin: 0 0 4px;
+    font-size: 13px; font-weight: 500; line-height: 1.3;
+    color: var(--ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pic-meta {
+    font-size: 12px; color: var(--muted);
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+    .picture-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 640px) {
+    .picture-grid { grid-template-columns: repeat(2, 1fr); }
+}

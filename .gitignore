@@ -5,3 +5,5 @@ node_modules/
 
 # Large data files -- download separately
 books/books.ndjson
+*.ndjson
+.direnv
