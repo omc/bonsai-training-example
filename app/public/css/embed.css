@@ -1,0 +1,82 @@
+/* ---- Iframe embed: chrome-less image search ---- */
+
+/* Transparent so the host page's background shows through. min-height must not
+   track the viewport, or the height reporter and the iframe grow each other. */
+body.embed {
+    min-height: 0;
+    background: transparent;
+    display: block;
+}
+
+.embed-shell {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 16px;
+}
+
+.embed-search {
+    max-width: none;
+    padding: 6px 6px 6px 18px;
+}
+.embed-go {
+    flex: 0 0 auto;
+    font: 600 14px/1 var(--font-ui);
+    color: #fff;
+    background: var(--green);
+    border: 0;
+    border-radius: 999px;
+    padding: 10px 18px;
+    cursor: pointer;
+    transition: background .15s ease;
+}
+.embed-go:hover { background: var(--green-deep); }
+.embed-go:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+
+.embed-examples {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    margin: 12px 0 0;
+    font-size: 13px;
+}
+.embed-examples-label { color: var(--muted); margin-right: 2px; }
+.embed-chip {
+    color: var(--ink-2);
+    background: var(--bg-elev);
+    border: 1px solid var(--line-2);
+    border-radius: 999px;
+    padding: 4px 12px;
+    text-decoration: none;
+    transition: border-color .15s ease, background .15s ease;
+}
+.embed-chip:hover { border-color: var(--green); }
+.embed-chip.active { background: var(--green-faint); border-color: var(--green); color: var(--green-deep); }
+
+.embed-status {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    margin: 16px 0 12px;
+    font-size: 13px; color: var(--muted);
+}
+.embed-status em { font-style: normal; color: var(--green); font-weight: 600; }
+.embed-status a { color: var(--link); text-decoration: none; }
+.embed-status a:hover { text-decoration: underline; }
+
+.embed-empty { color: var(--muted); font-size: 14px; }
+
+/* Raw similarity scores mean little to a marketing audience. */
+.embed .pic-score { display: none; }
+
+.embed-pager { padding: 20px 0 4px; gap: 12px; }
+.embed-page-of { font: 13px/1 var(--font-ui); color: var(--muted); }
+
+.embed-footer {
+    margin-top: 16px;
+    text-align: right;
+    font-size: 12px;
+}
+.embed-footer a { color: var(--muted); text-decoration: none; }
+.embed-footer a:hover { color: var(--green); }
+
+@media (max-width: 640px) {
+    .embed-shell { padding: 12px; }
+    .embed-hint { display: none; }
+    .picture-grid { gap: 10px; }
+}

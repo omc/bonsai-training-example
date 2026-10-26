@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bonsai &mdash; Compare Results</title>
+  <link rel="shortcut icon" type="image/x-icon" href="https://cdn.prod.website-files.com/63c81e4decde60c281417feb/63c81e4decde604e0c417ffb_Favicon.png" />
+  <link href="/css/fonts.css" rel="stylesheet">
+  <link href="/css/results.css" rel="stylesheet">
+</head>
+<body>
+  <div class="bg-wash" aria-hidden="true"></div>
+
+  <header class="app-header">
+    <div class="header-inner">
+      <a href="/"><img src="/img/logo.svg" width="100" height="28"></a>
+      <span class="compare-brand">Blind Similarity Compare &middot; Results</span>
+      <a class="pick-btn ghost header-cta" href="/compare">Run more &#8635;</a>
+    </div>
+  </header>
+
+  <main class="compare">
+    <div class="compare-head">
+      <h1>Preference Results</h1>
+      <p class="compare-sub"><strong><%= total.toLocaleString() %></strong> rounds recorded &middot; <strong><%= decisive.toLocaleString() %></strong> decisive picks</p>
+    </div>
+
+    <% if (total === 0) { %>
+    <p style="text-align:center;color:var(--muted)">No evaluations recorded yet. <a href="/compare">Start comparing &raquo;</a></p>
+    <% } else { %>
+
+    <section class="chart-block">
+      <h2 class="chart-title">Head-to-head <span class="chart-note">(decisive picks only)</span></h2>
+      <% headToHead.forEach(function(b) { %>
+      <div class="bar-row">
+        <div class="bar-label">
+          <%= b.label %>
+          <% if (leader === b.index) { %><span class="winner-tag">leader</span><% } %>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill <%= b.index === indexA ? 'fill-a' : 'fill-b' %>" style="width: <%= b.pct.toFixed(1) %>%"></div>
+        </div>
+        <div class="bar-value"><%= b.count.toLocaleString() %> <span class="bar-pct"><%= b.pct.toFixed(1) %>%</span></div>
+      </div>
+      <% }); %>
+      <% if (decisive === 0) { %>
+      <p class="chart-empty">No decisive picks yet &mdash; all rounds were neutral or identical.</p>
+      <% } %>
+    </section>
+
+    <section class="chart-block">
+      <h2 class="chart-title">All outcomes <span class="chart-note">(share of <%= total.toLocaleString() %> rounds)</span></h2>
+      <% outcomes.forEach(function(o) { %>
+      <div class="bar-row">
+        <div class="bar-label"><%= o.label %></div>
+        <div class="bar-track">
+          <div class="bar-fill fill-<%= o.kind %>" style="width: <%= o.pct.toFixed(1) %>%"></div>
+        </div>
+        <div class="bar-value"><%= o.count.toLocaleString() %> <span class="bar-pct"><%= o.pct.toFixed(1) %>%</span></div>
+      </div>
+      <% }); %>
+    </section>
+
+    <% } %>
+  </main>
+
+  <footer class="app-footer">
+    <div class="footer-row">
+      <div>&copy; 2026 Bonsai</div>
+      <div class="links">
+        <a href="https://bonsai.io/">About</a>
+        <a href="https://bonsai.io/privacy">Privacy</a>
+        <a href="https://bonsai.io/terms">Terms</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

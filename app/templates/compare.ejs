@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bonsai &mdash; Blind Compare</title>
+  <link rel="shortcut icon" type="image/x-icon" href="https://cdn.prod.website-files.com/63c81e4decde60c281417feb/63c81e4decde604e0c417ffb_Favicon.png" />
+  <link href="/css/fonts.css" rel="stylesheet">
+  <link href="/css/results.css" rel="stylesheet">
+</head>
+<body>
+  <div class="bg-wash" aria-hidden="true"></div>
+
+  <header class="app-header">
+    <div class="header-inner">
+      <a href="/"><img src="/img/logo.svg" width="100" height="28"></a>
+      <span class="compare-brand">Blind Similarity Compare</span>
+      <a class="pick-btn ghost header-cta" href="/compare/results">View results &#8594;</a>
+    </div>
+  </header>
+
+  <% if (empty) { %>
+  <main class="compare">
+    <div class="compare-head">
+      <h1>Blind Compare</h1>
+      <p class="compare-sub">No differing result sets found. <%= count %> evaluations recorded.</p>
+      <a class="pick-btn" href="/compare">Try again</a>
+    </div>
+  </main>
+  <% } else { %>
+
+  <main class="compare">
+    <div class="compare-head">
+      <h1>Which set of similar images is better?</h1>
+      <p class="compare-sub">Both columns show images similar to the same source. Pick the column you prefer. <strong><%= count.toLocaleString() %></strong> evaluations recorded.</p>
+      <form class="pick-form" method="post" action="/compare/choose">
+        <input type="hidden" name="source_id" value="<%= sourceId %>">
+        <input type="hidden" name="left_index" value="<%= left.index %>">
+        <input type="hidden" name="right_index" value="<%= right.index %>">
+        <input type="hidden" name="left_ids" value="<%= JSON.stringify(left.ids) %>">
+        <input type="hidden" name="right_ids" value="<%= JSON.stringify(right.ids) %>">
+        <div class="pick-buttons">
+          <button type="submit" name="choice" value="left" class="pick-btn">&#9664;&nbsp; Prefer Left</button>
+          <button type="submit" name="choice" value="neutral" class="pick-btn ghost">Neutral &#8776;</button>
+          <button type="submit" name="choice" value="right" class="pick-btn">Prefer Right &nbsp;&#9654;</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="compare-cols">
+      <% [left, right].forEach(function(col, ci) { %>
+      <section class="compare-col">
+        <h2 class="col-head"><%= ci === 0 ? 'Left' : 'Right' %></h2>
+        <div class="col-cards">
+          <%- include('_compare-card', { src: source._source, config: config, badge: 'Source', isSource: true }) %>
+          <% col.res.neighbors.forEach(function(h, i) { %>
+          <%- include('_compare-card', { src: h._source, config: config, badge: '#' + (i + 1), isSource: false }) %>
+          <% }); %>
+        </div>
+      </section>
+      <% }); %>
+    </div>
+  </main>
+  <% } %>
+
+  <footer class="app-footer">
+    <div class="footer-row">
+      <div>&copy; 2026 Bonsai</div>
+      <div class="links">
+        <a href="https://bonsai.io/">About</a>
+        <a href="https://bonsai.io/privacy">Privacy</a>
+        <a href="https://bonsai.io/terms">Terms</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

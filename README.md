@@ -11,6 +11,9 @@ app/
   templates/
     index.ejs             Landing page (search box)
     results.ejs           Results page (hits, sidebar filters, pagination)
+    _result-tile.ejs      Picture grid tile (image, score, metadata)
+    compare.ejs           Blind A/B similarity eval page
+    _compare-card.ejs     Card partial for the compare columns
   public/
     css/
       index.css           Landing page styles (light/dark/forest themes)
@@ -24,8 +27,6 @@ app/
     books.js              Books dataset config (full-text + relevance tuning)
     music.js              Music dataset config (Chinook data, permissions)
     pictures.js           Pictures dataset config (multimodal kNN, grid layout)
-  templates/
-    _result-tile.ejs      Picture grid tile (image, similarity score, metadata)
   package.json            Dependencies: express 5.1, opensearch 3.5, ejs 5.0
   Procfile                Heroku start command
   app.json                Heroku deployment manifest
@@ -35,9 +36,11 @@ books/
   bulk/                   32 sharded NDJSON files (books-00..books-31)
   books.ndjson            Combined bulk data (gitignored, download separately)
 pictures/
-  pictures-index.json     OpenSearch index mapping (kNN vector field)
-  index.sh                Bash script to create index and bulk-load images
-  pictures.ndjson         Bulk data: base64 images + 1152-dim embeddings
+  pictures-index.json      OpenSearch index mapping (kNN vector field)
+  index-lg.sh              Build the `pictures` index (1152-dim embeddings)
+  index.sh                 Build the `pictures-sm` index (768-dim embeddings)
+  pictures.ndjson          Bulk data: base64 images + embedding vectors
+  compare-results.ndjson   Blind A/B eval log (created at runtime, gitignored)
 render.yaml               Render.com deployment config
 flake.nix                 Nix dev shell (Node 24, eslint_d, prettierd)
 .envrc                    direnv: `use flake`
@@ -61,10 +64,9 @@ cp app/.env.example .env
 
 The app reads `BONSAI_URL` for the OpenSearch connection. `PORT` defaults to 4444.
 
-The **Pictures** dataset additionally needs an embedding service for multimodal
-search. It reads `EMBED_URL` (default `http://127.0.0.1:5100/embed`) — a service
-that accepts `POST {"inputs": "<text>"}` and returns a batch of vectors
-(`[[0.3, 1.9, ...]]`). See [Multimodal Image Search](#multimodal-image-search-pictures).
+The **Pictures** and **Multimodal** datasets live on a separate cluster read from
+`BONSAI_MULTIMODAL_URL`, which embeds query text server-side. See
+[Multimodal Image Search](#multimodal-image-search-pictures).
 
 ### Index the Data
 
@@ -81,12 +83,14 @@ To index the **Pictures** dataset:
 ```bash
 cd pictures
 source ../.env
-bash index.sh
+bash index-lg.sh    # pictures    — 1152-dim embeddings
+bash index.sh       # pictures-sm — 768-dim embeddings (for /compare)
 ```
 
-This recreates the `pictures` index and bulk-loads `pictures.ndjson`, splitting it
-into 100-line chunks (the file carries base64 images + 1152-dim vectors, so it is
-sent in smaller requests rather than one large payload).
+Each script recreates its index and bulk-loads `pictures.ndjson`, split into
+chunks (the file carries base64 images plus embedding vectors, so it is sent in
+smaller requests rather than one large payload). `pictures` alone is enough to run
+the app; `pictures-sm` is only needed for the [blind A/B eval](#blind-similarity-comparison-ab-eval).
 
 ### Run the App
 
@@ -113,7 +117,10 @@ by a config file in `app/datasets/`; adding a dataset means adding a config.
 | GET | `/` | Redirects to `/books` |
 | GET | `/:dataset` | Landing page with search form (e.g. `/pictures`) |
 | GET | `/:dataset/search?q=...` | Search results (e.g. `/pictures/search?q=eiffel+tower`) |
+| GET | `/:dataset/similar?id=...` | Image-to-image similarity (kNN datasets only, e.g. `/pictures/similar?id=clipart_309_000002.jpg`) |
 | GET | `/:dataset/count` | Document count for the dataset's index (JSON) |
+| GET | `/compare` | Blind A/B similarity eval of two picture indices (see below) |
+| POST | `/compare/choose` | Records a preference and loads the next comparison |
 | GET | `/health` | OpenSearch cluster health (JSON) |
 
 ### Search Parameters
@@ -182,36 +189,163 @@ The server parses `?page=N`, computes `from = (page - 1) * 10`, and passes it to
 
 ## Multimodal Image Search (Pictures)
 
-The **Pictures** dataset (`/pictures`) does text-to-image search: you type a text
-query and get back a grid of visually similar images, ranked by vector similarity.
+The **Pictures** dataset (`/pictures`) does vector image search: type a text query
+to get a grid of matching images (text-to-image), or click any result to find
+visually similar images (image-to-image). Results are ranked by vector similarity.
 No facets or filters.
 
-### Pipeline
+### Text-to-image pipeline
 
-1. The query string is sent to the embedding service (`EMBED_URL`) as
-   `POST {"inputs": "<query>"}`, which returns a dense vector (`[[...]]`).
-2. `search.js` builds an OpenSearch `knn` query against the `emb` field
-   (1152-dim HNSW vector) with that vector.
-3. Hits carry `img` (base64 JPEG), `width`, `height`, and `path`. `emb` is
-   excluded from `_source` to keep responses small.
+1. `search.js` builds an OpenSearch `knn` query against the
+   `img__bonsai_multimodal_01` field, passing the raw query string as `vector`.
+2. The `BONSAI_MULTIMODAL_URL` cluster embeds the text server-side and runs the
+   vector search.
+3. Hits carry `img` (base64 JPEG), `width`, `height`, and `path`. The vector
+   field is excluded from `_source` to keep responses small.
 4. `results.ejs` renders a responsive grid (max 4 tiles per row) of
    `_result-tile.ejs` cards showing the image, its similarity score, dimensions,
-   and source folder.
+   and source folder. Each tile links to that image's similarity search.
 
 The dataset config lives in `app/datasets/pictures.js`
 (`query.type: "knn"`, `display.layout: "grid"`, `perPage: 20`). This is the same
 config-driven mechanism used by `books`/`music`; only the query type and display
 layout differ.
 
+### Image-to-image similarity
+
+Clicking a tile navigates to `/:dataset/similar?id=<doc id>`, which finds images
+similar to an existing one — no embedding service call needed, since the query
+vector comes from the index:
+
+1. `searchSimilar()` in `search.js` fetches the clicked document by id and reads
+   its stored `img__bonsai_multimodal_01` vector.
+2. It runs the same `knn` query with that vector.
+3. The document's own self-match is filtered out, then re-inserted at the front of
+   the first page with score `1.0`. So the clicked image **always appears first**
+   at similarity `1.0`, even if approximate-nearest-neighbor recall would have
+   dropped it. (In practice the L2 self-match already scores exactly `1.0` and
+   sorts first; the explicit prepend just guarantees it.)
+
+The same grid renders the results, with the source image marked by a "Source
+image" badge. Clicking any neighbor pivots the similarity search onto it.
+
+### Embeddable search (iframe)
+
+`/embed/pictures` and `/embed/multimodal` are chrome-less versions of those
+searches for embedding in a marketing page: search box, example-query chips, a 12-image grid, Prev/Next
+paging, and click-through image-to-image similarity, all kept inside the frame.
+With no `?q=` it opens on results for the first example query, so the frame is
+never blank. `?q=` sets the initial query. A `layout: "grid"` dataset opts in
+with an `embed: { examples: [...] }` block in its config; other datasets 404.
+
+```html
+<iframe id="bonsai-search" src="https://<app-host>/embed/pictures"
+        title="Image search demo" loading="lazy"
+        style="width:100%;height:1260px;border:0"></iframe>
+<script>
+  // Optional: resize the iframe to its content (no inner scrollbar).
+  window.addEventListener("message", function (e) {
+    if (e.origin !== "https://<app-host>") return;
+    if (!e.data || e.data.type !== "bonsai-embed:height") return;
+    document.getElementById("bonsai-search").style.height = e.data.height + "px";
+  });
+</script>
+```
+
+The page posts `{type: "bonsai-embed:height", height}` to its parent whenever its
+height changes. The body is transparent so the host background shows through.
+Page size is `EMBED_PER_PAGE` in `server.js`.
+
+Framing is allowed from any origin by default (`Content-Security-Policy:
+frame-ancestors *`). Set `EMBED_FRAME_ANCESTORS` to restrict it, e.g.
+`EMBED_FRAME_ANCESTORS="https://bonsai.io https://*.bonsai.io"`.
+
 ### Pagination caveat
 
-Pagination "works" but is semantically loose for kNN. OpenSearch reports
-`hits.total` as the number of candidate docs matched across segments, not the
-top-k actually returned — so the displayed result count is a kNN artifact rather
-than a true match count. Each "page" is just a lower slice of the same ranked
-similarity list. Deep paging also requires `k >= from + size`, so later pages
-request larger candidate pools. For a top-k similarity demo, a fixed top-N view is
-arguably more honest than pagination.
+OpenSearch reports kNN `hits.total` as candidates matched across segments (up to
+`k` per segment), not the top-k actually reachable. To keep paging honest:
+
+- Every page requests the same fixed candidate pool, `k = query.paginationDepth`
+  (200 for Pictures), so the ranking doesn't shift as you page.
+- `hits.total` is clamped to `paginationDepth`, and the last page is trimmed to fit.
+- Each request sets `preference` derived from the query text (or the clicked doc
+  id for similarity). ANN results can differ between replicas, so without this,
+  consecutive pages could hit different copies and duplicate or skip items.
+  Hybrid (Multimodal) searches use the same preference routing.
+
+## Blind Similarity Comparison (A/B Eval)
+
+`/compare` is a blind A/B harness for judging two image-embedding models against
+each other on image-to-image similarity. It compares two indices with identical
+document ids but different embeddings — by default `pictures` (1152-dim) vs
+`pictures-sm` (768-dim, a smaller model). The pair is hardcoded at the top of the
+route in `server.js` (`COMPARE_A` / `COMPARE_B`).
+
+### Flow
+
+1. `GET /compare` picks a random document id (uniform, via `random_score`).
+2. For **each** index it loads that doc's stored `emb` and fetches the top-5
+   nearest neighbors (self-match excluded).
+3. If the two neighbor id lists are identical (same ids, same order), the round is
+   auto-logged as `"identical"` and a new id is drawn — the user is never shown a
+   tie (capped at 25 redraws, after which a "try again" page renders).
+4. A coin toss decides which index's results go in the **left** vs **right**
+   column, so the layout reveals nothing about which model is which.
+5. Each column shows the source image (badged `Source`) followed by its 5 nearest
+   neighbors, ranked `#1`–`#5`. Similarity **scores are intentionally hidden** —
+   the two models have different score scales, so showing them would bias a blind
+   visual preference. Rank position is shown instead.
+6. The user clicks **Prefer Left**, **Prefer Right**, or **Neutral** (no
+   preference — either result set is fine). `POST /compare/choose` resolves the
+   choice to its index (or records neutrality), appends a record, and redirects to
+   `/compare` for the next round.
+
+### Result log
+
+Preferences are appended as NDJSON (one JSON object per line) to
+`pictures/compare-results.ndjson`:
+
+```json
+{
+  "timestamp": "2026-07-29T12:23:52.077Z",
+  "source_id": "clipart_278_000145.jpg",
+  "left_index": "pictures-sm",
+  "left_ids": ["clipart_125_000189.jpg", "..."],
+  "right_index": "pictures",
+  "right_ids": ["clipart_125_000130.jpg", "..."],
+  "choice": "left",
+  "preferred": "pictures-sm"
+}
+```
+
+`choice` is what the user clicked — `left`, `right`, `neutral` (saw a difference
+but had no preference), or `null` for an auto-logged tie. `preferred` is the
+resolved value:
+
+| `choice` | `preferred` | Meaning |
+|----------|-------------|---------|
+| `left` / `right` | the chosen index name | User preferred that index's results |
+| `neutral` | `"neutral"` | Results differed, but user was happy with either |
+| `null` | `"identical"` | Both indices returned the same top-5 (auto-logged, not shown) |
+
+### Blindness caveat
+
+Blindness is enforced at the UI level only: the left/right → index mapping is
+carried in hidden form fields, so it is visible to anyone who opens browser
+devtools. That is fine for self-evaluation; for tamper-resistant blinding the
+mapping would need to live server-side behind an opaque token.
+
+### Setup
+
+Both indices share the same schema and bulk file; they differ only in the
+embedding model. Build them from `pictures/`:
+
+```bash
+cd pictures
+source ../.env
+bash index-lg.sh     # creates and loads pictures    (1152-dim)
+bash index.sh        # creates and loads pictures-sm  (768-dim)
+```
 
 ## Index Schema
 

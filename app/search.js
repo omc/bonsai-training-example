@@ -1,37 +1,132 @@
 const { Client } = require("@opensearch-project/opensearch");
 const client = new Client({ node: process.env.BONSAI_URL });
 
-const EMBED_URL = process.env.EMBED_URL || "http://127.0.0.1:5100/embed";
-
-// Fetch a dense embedding for a text query from the embedding service.
-const getEmbedding = async function (text) {
-  const resp = await fetch(EMBED_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ inputs: text }),
-  });
-  if (!resp.ok) {
-    throw new Error("Embedding service returned " + resp.status);
-  }
-  const data = await resp.json();
-  // Service returns a batch: [[...vector...]]
-  return Array.isArray(data[0]) ? data[0] : data;
+// Datasets may live on another cluster (config.url); one client per URL.
+const clients = {};
+const getClient = function (config) {
+  if (!config || !config.url) return client;
+  if (!clients[config.url])
+    clients[config.url] = new Client({ node: config.url });
+  return clients[config.url];
 };
 
-// Build a kNN vector-search body. `from`/`k` paginate; OpenSearch needs k >= from + size.
+// Vector field used for similarity: top-level for knn datasets, the kNN
+// subquery's field for hybrid ones.
+const knnField = function (config) {
+  return config.query.knn ? config.query.knn.field : config.query.field;
+};
+
+const sourceFilter = function (config) {
+  return (
+    config.query.sourceIncludes || {
+      excludes: config.query.sourceExcludes || [],
+    }
+  );
+};
+
+// Build a kNN vector-search body. OpenSearch needs k >= from + size; a fixed
+// paginationDepth keeps the candidate pool (and so the ranking) stable across pages.
 const getKnnQuery = function (config, vector, size, from) {
-  var field = config.query.field;
+  var field = knnField(config);
+  var k = config.query.paginationDepth || (from || 0) + size;
   var body = {
     size: size,
     from: from || 0,
     query: {
       knn: {
-        [field]: { vector: vector, k: (from || 0) + size },
+        [field]: { vector: vector, k: k },
       },
     },
-    _source: { excludes: config.query.sourceExcludes || [] },
+    _source: sourceFilter(config),
   };
   return body;
+};
+
+// Aggregation requests from config.aggregations.
+const buildAggs = function (config) {
+  var aggs = {};
+  config.aggregations.forEach(function (agg) {
+    if (agg.type === "terms") {
+      aggs[agg.name] = { terms: { field: agg.field } };
+      if (agg.size) aggs[agg.name].terms.size = agg.size;
+    } else if (agg.type === "range") {
+      aggs[agg.name] = {
+        range: { field: agg.field, ranges: agg.ranges },
+      };
+    } else if (agg.type === "histogram") {
+      aggs[agg.name] = {
+        histogram: { field: agg.field, interval: agg.filterInterval },
+      };
+    }
+  });
+  return aggs;
+};
+
+// Hybrid lexical + kNN query, run through a search pipeline that normalizes and
+// combines subquery scores. Hybrid can't sit inside a bool and 2.19 has no
+// hybrid-level filter, so filters are pushed into each subquery.
+const getHybridQuery = function (config, querystring, size, filters, from) {
+  var q = config.query;
+  var filterClauses = buildFilterClauses(config, filters);
+
+  var lexical = {
+    multi_match: { query: querystring, fields: q.lexical.fields },
+  };
+  var lexicalFilters = (q.lexical.filter || []).concat(filterClauses);
+  if (lexicalFilters.length) {
+    lexical = { bool: { must: lexical, filter: lexicalFilters } };
+  }
+  var knn = { vector: querystring, k: q.knn.k };
+  if (filterClauses.length) {
+    knn.filter = { bool: { filter: filterClauses } };
+  }
+
+  return {
+    size: size,
+    from: from || 0,
+    _source: q.sourceIncludes,
+    query: {
+      hybrid: {
+        pagination_depth: q.paginationDepth,
+        queries: [lexical, { knn: { [q.knn.field]: knn } }],
+      },
+    },
+    aggs: buildAggs(config),
+  };
+};
+
+// ANN results can differ between replicas, which shuffles items across pages.
+// A stable preference pins every page of one query to the same shard copies.
+// Prefixed because preferences starting with "_" are reserved.
+const preferenceFor = function (key) {
+  return "q:" + key;
+};
+
+// Results can't go past paginationDepth; trim the last page to fit.
+const pageSize = function (config, k, from) {
+  var depth = config.query.paginationDepth;
+  return depth ? Math.min(k, depth - (from || 0)) : k;
+};
+
+const emptyResults = function () {
+  return {
+    body: {
+      hits: { hits: [], total: { value: 0 } },
+      took: 0,
+      aggregations: {},
+    },
+  };
+};
+
+// kNN hits.total counts candidates across segments (up to k per segment), not
+// the k results actually reachable; clamp it to what pagination can show.
+const capKnnTotal = function (config, resp) {
+  var depth = config.query.paginationDepth;
+  var total = resp.body.hits.total;
+  if (depth && total && total.value > depth) {
+    resp.body.hits.total = { value: depth, relation: "eq" };
+  }
+  return resp;
 };
 
 const getQuery = function (config, querystring, k, filters, permissions) {
@@ -39,24 +134,26 @@ const getQuery = function (config, querystring, k, filters, permissions) {
   filters = filters || {};
 
   // --- build should clauses from config ---
-  var shouldClauses = config.query.clauses.map(function (clause) {
-    if (clause.type === "match_phrase") {
-      var mp = { query: querystring, boost: clause.boost };
-      if (clause.slop != null) mp.slop = clause.slop;
-      return { match_phrase: { [clause.field]: mp } };
-    }
-    if (clause.type === "multi_match") {
-      return {
-        multi_match: {
-          query: querystring,
-          type: clause.matchType,
-          fields: clause.fields,
-          boost: clause.boost,
-        },
-      };
-    }
-    return null;
-  }).filter(Boolean);
+  var shouldClauses = config.query.clauses
+    .map(function (clause) {
+      if (clause.type === "match_phrase") {
+        var mp = { query: querystring, boost: clause.boost };
+        if (clause.slop != null) mp.slop = clause.slop;
+        return { match_phrase: { [clause.field]: mp } };
+      }
+      if (clause.type === "multi_match") {
+        return {
+          multi_match: {
+            query: querystring,
+            type: clause.matchType,
+            fields: clause.fields,
+            boost: clause.boost,
+          },
+        };
+      }
+      return null;
+    })
+    .filter(Boolean);
 
   // --- build core bool query ---
   var boolQuery = { bool: { should: shouldClauses, minimum_should_match: 1 } };
@@ -79,29 +176,30 @@ const getQuery = function (config, querystring, k, filters, permissions) {
     queryBody = boolQuery;
   }
 
-  // --- build aggregations from config ---
-  var aggs = {};
-  config.aggregations.forEach(function (agg) {
-    if (agg.type === "terms") {
-      aggs[agg.name] = { terms: { field: agg.field } };
-      if (agg.size) aggs[agg.name].terms.size = agg.size;
-    } else if (agg.type === "range") {
-      aggs[agg.name] = {
-        range: { field: agg.field, ranges: agg.ranges },
-      };
-    } else if (agg.type === "histogram") {
-      aggs[agg.name] = {
-        histogram: { field: agg.field, interval: agg.filterInterval },
-      };
-    }
-  });
-
   var body = {
     size: k,
     query: queryBody,
     _source: { excludes: config.query.sourceExcludes || [] },
-    aggs: aggs,
+    aggs: buildAggs(config),
   };
+
+  var filterClauses = buildFilterClauses(config, filters, permissions);
+
+  // --- attach filters to the bool query ---
+  if (filterClauses.length) {
+    if (config.query.scoreFunction) {
+      body.query.function_score.query.bool.filter = filterClauses;
+    } else {
+      body.query.bool.filter = filterClauses;
+    }
+  }
+
+  return body;
+};
+
+// Sidebar selections (and optional permissions) as non-scoring filter clauses.
+const buildFilterClauses = function (config, filters, permissions) {
+  filters = filters || {};
 
   // --- apply permissions filter ---
   var filterClauses = [];
@@ -160,32 +258,132 @@ const getQuery = function (config, querystring, k, filters, permissions) {
     }
   });
 
-  // --- attach filters to the bool query ---
-  if (filterClauses.length) {
-    if (config.query.scoreFunction) {
-      body.query.function_score.query.bool.filter = filterClauses;
-    } else {
-      body.query.bool.filter = filterClauses;
-    }
-  }
-
-  return body;
+  return filterClauses;
 };
 
-const search = async function (config, querystring, k, filters, from, permissions) {
+// Image-to-image similarity: use an existing document's stored embedding as the
+// query vector. The clicked doc is guaranteed to lead the first page.
+const searchSimilar = async function (config, id, k, from) {
+  from = from || 0;
+  const field = knnField(config);
+  const size = pageSize(config, k, from);
+  if (size <= 0) return emptyResults();
+
+  const doc = await getClient(config).get({ index: config.index, id: id });
+  const src = doc.body._source;
+  const vector = src[field];
+
+  const body = getKnnQuery(config, vector, size, from);
+  const resp = await getClient(config).search({
+    index: config.index,
+    body: body,
+    preference: preferenceFor(id),
+  });
+
+  // Drop the self-match from the neighbor list; on the first page, prepend it
+  // explicitly so it always appears first regardless of ANN recall. Its score is
+  // the self-match score (1.0 for cosine, 2.0 for innerproduct) when ANN found it.
+  var allHits = resp.body.hits.hits || [];
+  var self = allHits.find(function (h) {
+    return h._id === id;
+  });
+  var hits = allHits.filter(function (h) {
+    return h._id !== id;
+  });
+  if (from === 0) {
+    var clickedSrc = {};
+    Object.keys(src).forEach(function (key) {
+      if (key !== field) clickedSrc[key] = src[key];
+    });
+    hits.unshift({
+      _id: id,
+      _score: self ? self._score : 1.0,
+      _source: clickedSrc,
+    });
+  }
+  resp.body.hits.hits = hits.slice(0, size);
+  resp.body.similarSource = src;
+  return capKnnTotal(config, resp);
+};
+
+const search = async function (
+  config,
+  querystring,
+  k,
+  filters,
+  from,
+  permissions,
+) {
   var body;
-  if (config.query.type === "knn") {
-    const vector = await getEmbedding(querystring);
-    body = getKnnQuery(config, vector, k, from);
+  var params = {};
+  var size = pageSize(config, k, from);
+  if (size <= 0) return emptyResults();
+  if (config.query.type === "hybrid") {
+    body = getHybridQuery(config, querystring, size, filters, from);
+    params.search_pipeline = config.query.pipeline;
+    params.preference = preferenceFor(querystring);
+  } else if (config.query.type === "knn") {
+    // Raw query text as the vector; the cluster embeds it server-side.
+    body = getKnnQuery(config, querystring, size, from);
+    params.preference = preferenceFor(querystring);
   } else {
     body = getQuery(config, querystring, k, filters, permissions);
     body.from = from || 0;
   }
-  const resp = await client.search({
-    index: config.index,
-    body: body,
-  });
-  return resp;
+  const resp = await getClient(config).search(
+    Object.assign(
+      {
+        index: config.index,
+        body: body,
+      },
+      params,
+    ),
+  );
+  return config.query.type === "knn" ? capKnnTotal(config, resp) : resp;
 };
 
-module.exports = { search };
+// Pick a random document id from an index (uniform via random_score).
+const randomId = async function (index) {
+  const resp = await client.search({
+    index: index,
+    body: {
+      size: 1,
+      _source: false,
+      query: { function_score: { query: { match_all: {} }, random_score: {} } },
+    },
+  });
+  const hits = resp.body.hits.hits || [];
+  return hits.length ? hits[0]._id : null;
+};
+
+// For a given doc id, return its source doc plus the top-k nearest neighbors
+// (excluding the doc itself) within a specific index. Used by the blind compare.
+const similarTopK = async function (index, field, id, k) {
+  const doc = await client.get({ index: index, id: id });
+  const src = doc.body._source;
+  const vector = src[field];
+
+  const resp = await client.search({
+    index: index,
+    body: {
+      size: k + 1, // self + k neighbors
+      query: { knn: { [field]: { vector: vector, k: k + 1 } } },
+      _source: { excludes: [field] },
+    },
+  });
+
+  const neighbors = (resp.body.hits.hits || [])
+    .filter(function (h) {
+      return h._id !== id;
+    })
+    .slice(0, k);
+
+  var sourceSrc = {};
+  Object.keys(src).forEach(function (key) {
+    if (key !== field) sourceSrc[key] = src[key];
+  });
+
+  return { source: { _id: id, _source: sourceSrc }, neighbors: neighbors };
+};
+
+module.exports = { getClient, search, searchSimilar, randomId, similarTopK };

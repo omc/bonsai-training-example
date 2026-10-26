@@ -1,0 +1,26 @@
+<%
+  var imgData = config.display.imageData(src);
+  var title = config.display.titleValue(src);
+%>
+<article class="pic-card<%= isSource ? ' pic-source' : '' %>">
+  <div class="pic-thumb">
+    <% if (imgData) { %>
+    <img src="<%- imgData %>" alt="<%= title %>" loading="lazy">
+    <% } %>
+    <% if (badge) { %>
+    <span class="<%= isSource ? 'pic-source-badge' : 'pic-rank' %>"><%= badge %></span>
+    <% } %>
+  </div>
+  <div class="pic-body">
+    <h3 class="pic-title" title="<%= src.path || title %>"><%= title %></h3>
+    <div class="pic-meta">
+      <% config.display.metaFields.forEach(function(mf, i) {
+        var val = mf.value(src);
+        if (val) { %>
+      <% if (i > 0) { %><span class="meta-sep">&middot;</span><% } %>
+      <span><%= val %></span>
+      <% }
+      }); %>
+    </div>
+  </div>
+</article>

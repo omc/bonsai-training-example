@@ -2,16 +2,28 @@
   var title = config.display.titleValue(src);
   var imgData = config.display.imageData(src);
   var score = (hit._score != null) ? hit._score.toFixed(3) : null;
+  var isSource = sourceId && sourceId === hit._id;
+  var original = config.display.originalLink ? config.display.originalLink(src) : null;
+  var tags = config.display.tags ? config.display.tags(src) : [];
+  // Callers (e.g. the iframe embed) can route tile clicks elsewhere.
+  var href = (typeof tileHref === 'function')
+    ? tileHref(hit)
+    : '/' + dataset + '/similar?id=' + encodeURIComponent(hit._id);
 %>
-<article class="pic-card">
-  <div class="pic-thumb">
-    <% if (imgData) { %>
-    <img src="<%- imgData %>" alt="<%= title %>" loading="lazy">
-    <% } %>
-    <% if (score != null) { %>
-    <span class="pic-score" title="Similarity score"><%= score %></span>
-    <% } %>
-  </div>
+<article class="pic-card<%= isSource ? ' pic-source' : '' %>">
+  <a class="pic-link" href="<%= href %>" title="Find images similar to this one">
+    <div class="pic-thumb">
+      <% if (imgData) { %>
+      <img src="<%- imgData %>" alt="<%= title %>" loading="lazy">
+      <% } %>
+      <% if (score != null) { %>
+      <span class="pic-score" title="Similarity score"><%= score %></span>
+      <% } %>
+      <% if (isSource) { %>
+      <span class="pic-source-badge">Source image</span>
+      <% } %>
+    </div>
+  </a>
   <div class="pic-body">
     <h3 class="pic-title" title="<%= src.path || title %>"><%= title %></h3>
     <div class="pic-meta">
@@ -22,6 +34,15 @@
       <span><%= val %></span>
       <% }
       }); %>
+      <% if (original) { %>
+      <span class="meta-sep">&middot;</span>
+      <a class="pic-original" href="<%= original %>" target="_blank" rel="noopener">original &#8599;</a>
+      <% } %>
     </div>
+    <% if (tags.length) { %>
+    <div class="pic-tags">
+      <% tags.forEach(function(t) { %><span class="pic-tag"><%= t %></span><% }); %>
+    </div>
+    <% } %>
   </div>
 </article>

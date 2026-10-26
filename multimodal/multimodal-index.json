@@ -1,0 +1,124 @@
+{
+  "mappings": {
+    "properties": {
+      "id": { "type": "keyword" },
+      "title": {
+        "type": "text",
+        "analyzer": "analyze_english",
+        "copy_to": [
+          "completions",
+          "suggest_word",
+          "suggest_word_all",
+          "suggest_phrase"
+        ]
+      },
+      "tags": {
+        "type": "keyword",
+        "copy_to": [
+          "completions",
+          "suggest_word",
+          "suggest_word_all",
+          "suggest_phrase"
+        ]
+      },
+      "url": { "type": "keyword", "index": false },
+      "width": { "type": "integer" },
+      "height": { "type": "integer" },
+      "webp_b64": { "type": "binary", "index": false },
+      "webp_b64__bonsai_multimodal_01": {
+        "type": "knn_vector",
+        "dimension": 768,
+        "mode": "on_disk",
+        "compression_level": "32x",
+        "method": {
+          "name": "hnsw",
+          "engine": "faiss",
+          "space_type": "innerproduct",
+          "parameters": { "ef_construction": 256, "m": 16 }
+        }
+      },
+      "completions": { "type": "search_as_you_type", "max_shingle_size": 3 },
+      "suggest_word": {
+        "type": "text",
+        "analyzer": "analyze_suggest_word",
+        "search_analyzer": "analyze_suggest_search",
+        "fielddata": true
+      },
+      "suggest_word_all": {
+        "type": "text",
+        "analyzer": "analyze_suggest_word",
+        "search_analyzer": "analyze_suggest_search",
+        "fielddata": true
+      },
+      "suggest_phrase": {
+        "type": "text",
+        "analyzer": "analyze_suggest_phrase",
+        "search_analyzer": "analyze_suggest_search",
+        "fielddata": true
+      }
+    }
+  },
+  "settings": {
+    "index": {
+      "number_of_shards": 3,
+      "number_of_replicas": 1,
+      "replication.type": "SEGMENT",
+      "knn": true,
+      "knn.derived_source.enabled": true
+    },
+    "analysis": {
+      "char_filter": {
+        "strip_html": { "type": "html_strip" }
+      },
+      "filter": {
+        "english_stop": { "type": "stop", "stopwords": "_english_" },
+        "english_light_stem": {
+          "type": "stemmer",
+          "language": "light_english"
+        },
+        "english_possessive_stem": {
+          "type": "stemmer",
+          "language": "possessive_english"
+        },
+        "shingles": {
+          "type": "shingle",
+          "min_shingle_size": 2,
+          "max_shingle_size": 4,
+          "output_unigrams": false
+        },
+        "edge_ngram_filter": {
+          "type": "edge_ngram",
+          "min_gram": 2,
+          "max_gram": 20
+        }
+      },
+      "analyzer": {
+        "analyze_english": {
+          "tokenizer": "standard",
+          "char_filter": ["html_strip"],
+          "filter": [
+            "lowercase",
+            "english_possessive_stem",
+            "english_stop",
+            "english_light_stem"
+          ]
+        },
+        "analyze_suggest_word": {
+          "tokenizer": "standard",
+          "char_filter": ["html_strip"],
+          "filter": ["lowercase", "english_stop"]
+        },
+        "analyze_suggest_phrase": {
+          "tokenizer": "standard",
+          "char_filter": ["strip_html"],
+          "filter": ["lowercase", "english_stop", "shingles", "unique"]
+        },
+        "analyze_suggest_search": {
+          "tokenizer": "standard",
+          "char_filter": ["strip_html"],
+          "filter": ["lowercase", "english_stop"]
+        }
+      }
+    }
+  }
+}

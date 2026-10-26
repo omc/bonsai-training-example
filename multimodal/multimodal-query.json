@@ -1,0 +1,25 @@
+{
+  "size": 24,
+  "_source": ["id", "title", "tags", "url", "webp_b64"],
+  "query": {
+    "hybrid": {
+      "pagination_depth": 100,
+      "queries": [
+        {
+          "multi_match": {
+            "query": "{{USER QUERY}}",
+            "fields": ["title^2", "tags"]
+          }
+        },
+        {
+          "knn": {
+            "webp_b64__bonsai_multimodal_01": {
+              "vector": "{{USER QUERY}}",
+              "k": 50
+            }
+          }
+        }
+      ]
+    }
+  }
+}

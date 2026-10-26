@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Image search &mdash; Bonsai</title>
+  <link href="/css/fonts.css" rel="stylesheet">
+  <link href="/css/results.css" rel="stylesheet">
+  <link href="/css/embed.css" rel="stylesheet">
+</head>
+<body class="embed">
+  <%
+    var hits = results ? (results.body.hits.hits || []) : [];
+    var total = results ? results.body.hits.total : 0;
+    var totalCount = (typeof total === 'object') ? total.value : total;
+    var pageable = config.query.paginationDepth ? Math.min(totalCount, config.query.paginationDepth) : totalCount;
+    var totalPages = Math.ceil(pageable / perPage);
+    var base = '/embed/' + dataset;
+
+    function searchUrl(q, p) {
+      var ps = new URLSearchParams({ q: q });
+      if (p > 1) ps.set('page', p);
+      return base + '?' + ps.toString();
+    }
+    // Keep the query so "back to results" can return to it.
+    function similarUrl(id, p) {
+      var ps = new URLSearchParams({ id: id, q: query });
+      if (p > 1) ps.set('page', p);
+      return base + '?' + ps.toString();
+    }
+    function pageUrl(p) {
+      return similarId ? similarUrl(similarId, p) : searchUrl(query, p);
+    }
+  %>
+
+  <div class="embed-shell">
+    <form class="search embed-search" action="<%= base %>" method="get" autocomplete="off" role="search">
+      <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="7"/>
+        <path d="M20 20l-3.5-3.5"/>
+      </svg>
+      <input name="q" type="text" aria-label="Describe the image you're looking for" value="<%= similarId ? '' : query %>" placeholder="Describe an image<%= indexCount ? ' — search ' + indexCount.toLocaleString() + ' assets' : '' %>..." />
+      <button type="submit" class="embed-go">Search</button>
+    </form>
+
+    <div class="embed-examples" aria-label="Example searches">
+      <span class="embed-examples-label">Try:</span>
+      <% examples.forEach(function(ex) { %>
+      <a class="embed-chip<%= (!similarId && ex === query) ? ' active' : '' %>" href="<%= searchUrl(ex, 1) %>"><%= ex %></a>
+      <% }); %>
+    </div>
+
+    <div class="embed-status">
+      <% if (error) { %>
+      <span><%= error %></span>
+      <% } else if (similarId) { %>
+      <span>Visually similar to <em><%= similarLabel %></em></span>
+      <span class="meta-sep">&middot;</span>
+      <a href="<%= query.trim() ? searchUrl(query, 1) : base %>">&larr; back to results</a>
+      <% } else if (results) { %>
+      <span>Results for <em>&ldquo;<%= query %>&rdquo;</em></span>
+      <span class="meta-sep">&middot;</span>
+      <span class="embed-hint">click any image to find similar ones</span>
+      <% } %>
+    </div>
+
+    <% if (results && !hits.length && !error) { %>
+    <p class="embed-empty">No images found.</p>
+    <% } %>
+
+    <div class="picture-grid">
+      <% hits.forEach(function(hit) { %>
+      <%- include('_result-tile', { hit: hit, src: hit._source, config: config, dataset: dataset, sourceId: similarId, tileHref: function(h) { return similarUrl(h._id, 1); } }) %>
+      <% }); %>
+    </div>
+
+    <% if (totalPages > 1) { %>
+    <nav class="pagination embed-pager" aria-label="Result pages">
+      <% if (page > 1) { %><a class="page-arrow" href="<%= pageUrl(page - 1) %>">&laquo; Prev</a><% } %>
+      <span class="embed-page-of">Page <%= page %> of <%= totalPages %></span>
+      <% if (page < totalPages) { %><a class="page-arrow" href="<%= pageUrl(page + 1) %>">Next &raquo;</a><% } %>
+    </nav>
+    <% } %>
+
+    <footer class="embed-footer">
+      <a href="https://bonsai.io/" target="_blank" rel="noopener">Powered by Bonsai multimodal search</a>
+    </footer>
+  </div>
+
+  <script>
+    // Report content height so the host page can size the iframe without scrollbars.
+    (function () {
+      if (window.parent === window) return;
+      var last = 0;
+      function post() {
+        var h = document.documentElement.scrollHeight;
+        if (h === last) return;
+        last = h;
+        window.parent.postMessage({ type: 'bonsai-embed:height', height: h }, '*');
+      }
+      new ResizeObserver(post).observe(document.body);
+      window.addEventListener('load', post);
+    })();
+  </script>
+</body>
+</html>

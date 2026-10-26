@@ -55,13 +55,22 @@
     }
   %>
 
+  <% var isSimilar = (typeof mode !== 'undefined' && mode === 'similar'); %>
   <div class="count-row">
+    <% if (isSimilar) { %>
+    <strong><%= totalCount.toLocaleString() %></strong> results <span class="meta-sep">&middot;</span> <%= (took / 1000).toFixed(2) %> seconds <span class="meta-sep">&middot;</span> similar to <em><%= similarLabel %></em> <span class="meta-sep">&middot;</span> <a href="/<%= dataset %>">new search</a>
+    <% } else { %>
     <strong><%= totalCount.toLocaleString() %></strong> results <span class="meta-sep">&middot;</span> <%= (took / 1000).toFixed(2) %> seconds <span class="meta-sep">&middot;</span> for <em>&ldquo;<%= query %>&rdquo;</em>
+    <% } %>
   </div>
 
-  <% var isGrid = config.display.layout === 'grid'; %>
-  <div class="layout<%= isGrid ? ' layout-grid' : '' %>">
-    <% if (!isGrid && config.aggregations && config.aggregations.length) { %>
+  <%
+    var isGrid = config.display.layout === 'grid';
+    // No facets on similarity results: they come from a plain kNN query.
+    var hasFilters = !isSimilar && config.aggregations && config.aggregations.length;
+  %>
+  <div class="layout<%= (isGrid && !hasFilters) ? ' layout-grid' : '' %>">
+    <% if (hasFilters) { %>
     <button class="filters-toggle" type="button" aria-expanded="false" aria-controls="filters-panel">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="12" y1="18" x2="20" y2="18"/></svg>
       Filters
@@ -108,7 +117,7 @@
         <% hits.forEach(function(hit) {
           var src = hit._source;
         %>
-        <%- include('_result-tile', { hit: hit, src: src, config: config }) %>
+        <%- include('_result-tile', { hit: hit, src: src, config: config, dataset: dataset, sourceId: (typeof similarId !== 'undefined' ? similarId : null) }) %>
         <% }); %>
       </div>
       <% } else { %>
@@ -128,21 +137,28 @@
       <% } %>
 
       <%
-        var totalPages = Math.ceil(totalCount / perPage);
+        // Hybrid queries can only page within pagination_depth.
+        var pageable = config.query.paginationDepth ? Math.min(totalCount, config.query.paginationDepth) : totalCount;
+        var totalPages = Math.ceil(pageable / perPage);
         if (totalPages > 1) {
           var baseParams = new URLSearchParams();
-          baseParams.set('q', query);
-          if (typeof role !== 'undefined' && role) baseParams.set('role', role);
-          var fKeys = Object.keys(f);
-          fKeys.forEach(function(key) {
-            [].concat(f[key]).forEach(function(val) {
-              baseParams.append(key, val);
+          if (isSimilar) {
+            baseParams.set('id', similarId);
+          } else {
+            baseParams.set('q', query);
+            if (typeof role !== 'undefined' && role) baseParams.set('role', role);
+            var fKeys = Object.keys(f);
+            fKeys.forEach(function(key) {
+              [].concat(f[key]).forEach(function(val) {
+                baseParams.append(key, val);
+              });
             });
-          });
+          }
+          var pagePath = isSimilar ? '/similar?' : '/search?';
           function pageUrl(p) {
             var ps = new URLSearchParams(baseParams);
             if (p > 1) ps.set('page', p);
-            return '/' + dataset + '/search?' + ps.toString();
+            return '/' + dataset + pagePath + ps.toString();
           }
 
           var windowSize = 7;

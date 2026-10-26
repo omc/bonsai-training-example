@@ -2,13 +2,28 @@ module.exports = {
   index: "pictures",
   label: "Pictures",
 
+  url: process.env.BONSAI_MULTIMODAL_URL,
+
   // Pagination sized to fill the 4-up grid evenly.
   perPage: 20,
 
   query: {
     type: "knn",
-    field: "emb",
-    sourceExcludes: ["emb"],
+    // Fixed kNN candidate pool; caps pagination at 10 pages of 20.
+    paginationDepth: 200,
+    field: "img__bonsai_multimodal_01",
+    sourceExcludes: ["img__bonsai_multimodal_01"],
+  },
+
+  // /embed/pictures: example-query chips; the first loads on open.
+  embed: {
+    examples: [
+      "city skyline at night",
+      "red sports car",
+      "dog on a beach",
+      "coffee cup",
+      "hand-drawn cartoon cat",
+    ],
   },
 
   // No facets or filters for multimodal image search.
@@ -25,7 +40,7 @@ module.exports = {
     },
     // Base64 JPEG stored in the `img` binary field.
     imageData: function (src) {
-      return src.img ? "data:image/jpeg;base64," + src.img : null;
+      return src.img; // ? "data:image/jpeg;base64," + src.img : null;
     },
     metaFields: [
       {

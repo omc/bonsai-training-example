@@ -45,9 +45,9 @@
       "img": {
         "type": "binary"
       },
-      "emb": {
+      "img__bonsai_multimodal_01": {
         "type": "knn_vector",
-        "dimension": 1152,
+        "dimension": 768,
         "method": {
           "name": "hnsw",
           "parameters": {
