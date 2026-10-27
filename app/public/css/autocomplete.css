@@ -1,0 +1,49 @@
+/* Autocomplete dropdown under a .search form (see /js/autocomplete.js). */
+.ac-host { position: relative; }
+/* The home page footer stacks above main.stage; lift it while open. */
+main.stage:has(.ac-list:not([hidden])) { z-index: 3; }
+.ac-list {
+    position: absolute; z-index: 50;
+    top: calc(100% + 6px); left: 0; right: 0;
+    max-height: min(460px, 70vh); overflow-y: auto;
+    background: var(--bg-elev, #fff);
+    border: 1px solid var(--line-2, #d3e2d6);
+    border-radius: 16px;
+    box-shadow: var(--shadow-2, 0 18px 50px rgba(15,42,46,.10));
+    padding: 6px;
+    text-align: left;
+}
+.ac-list[hidden] { display: none; }
+.ac-option {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    font: 15px/1.35 var(--font-ui, system-ui, sans-serif);
+    color: var(--ink-2, #3a4f4f);
+    cursor: pointer;
+}
+.ac-option b { font-weight: 600; color: var(--ink, #0f2a2e); }
+.ac-option.active, .ac-option:hover { background: var(--green-faint, #e8f3eb); }
+.ac-head {
+    margin: 6px 12px 2px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line, #e3ece3);
+    font: 600 11px/1.4 var(--font-ui, system-ui, sans-serif);
+    letter-spacing: .06em; text-transform: uppercase;
+    color: var(--muted, #6b7e7c);
+}
+.ac-doc { padding: 6px 12px; font-size: 14px; }
+.ac-doc img {
+    flex: 0 0 auto;
+    width: 56px; height: 40px; object-fit: cover;
+    border-radius: 6px;
+    background: var(--bg-tint, #ecf6ee);
+}
+.ac-doc span {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+
+@media (max-width: 640px) {
+    .ac-option { font-size: 14px; padding: 9px 10px; }
+    .ac-doc img { width: 48px; height: 36px; }
+}

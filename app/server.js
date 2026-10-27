@@ -2,7 +2,7 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const { Client } = require("@opensearch-project/opensearch");
-const { getClient, search, searchSimilar, randomId, similarTopK } = require("./search");
+const { getClient, search, searchSimilar, randomId, similarTopK, autocomplete } = require("./search");
 const { runAgentLoop } = require("./sid");
 
 const app = express();
@@ -333,6 +333,23 @@ app.get("/:dataset/count", async (req, res) => {
     res.json({ index: config.index, count: resp.body.count });
   } catch (err) {
     res.status(502).json({ error: err.message });
+  }
+});
+
+// Search-as-you-type JSON for datasets with an `autocomplete` config. Also
+// used by the embed (same origin). Short public caching: the browser and any
+// CDN absorb repeat prefixes.
+app.get("/:dataset/autocomplete", async (req, res) => {
+  var config = configs[req.params.dataset];
+  if (!config || !config.autocomplete) return res.status(404).json({ error: "Not found" });
+  var q = String(req.query.q || "").slice(0, 100);
+  try {
+    var result = await autocomplete(config, q);
+    res.set("Cache-Control", "public, max-age=300");
+    res.json(result);
+  } catch (err) {
+    console.error("Autocomplete error:", err.message);
+    res.status(502).json({ error: "Autocomplete failed" });
   }
 });
 

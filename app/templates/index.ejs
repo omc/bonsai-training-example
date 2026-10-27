@@ -8,6 +8,7 @@
   <link rel="apple-touch-icon" href="https://cdn.prod.website-files.com/63c81e4decde60c281417feb/63c81e4decde602edf417ffc_Webclip.png" />
   <link href="/css/fonts.css" rel="stylesheet">
   <link href="/css/index.css" rel="stylesheet">
+  <% if (config.autocomplete) { %><link href="/css/autocomplete.css" rel="stylesheet"><% } %>
 </head>
 <body>
   <div class="bg-wash" aria-hidden="true"></div>
@@ -26,7 +27,7 @@
         <circle cx="11" cy="11" r="7"/>
         <path d="M20 20l-3.5-3.5"/>
       </svg>
-      <input name="q" type="text" placeholder="Search<%= indexCount ? ' ' + indexCount.toLocaleString() : '' %> <%= config.label %> entries..." aria-label="Search" spellcheck="false" />
+      <input name="q" type="text" placeholder="Search<%= indexCount ? ' ' + indexCount.toLocaleString() : '' %> <%= config.label %> entries..." aria-label="Search" spellcheck="false"<% if (config.autocomplete) { %> data-autocomplete="/<%= dataset %>/autocomplete" data-asset-base="/<%= dataset %>/asset"<% } %> />
     </form>
   </main>
 
@@ -40,5 +41,6 @@
       </div>
     </div>
   </footer>
+  <% if (config.autocomplete) { %><script src="/js/autocomplete.js" defer></script><% } %>
 </body>
 </html>

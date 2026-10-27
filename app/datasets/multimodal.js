@@ -131,6 +131,26 @@ module.exports = {
     openFacets: 4,
   },
 
+  // Search-as-you-type over the suggest fields in wikimedia-index.json
+  // (caption + depicts feed completions/suggest_word/suggest_phrase), after
+  // https://bonsai.io/blog/how-to-really-scale-autocomplete/.
+  autocomplete: {
+    completionField: "completions",
+    wordField: "suggest_word",
+    phraseField: "suggest_phrase",
+    minDocCount: 3,
+    suggestions: 8,
+    docs: 4,
+    docTitle: function (src) {
+      return src.caption || (src.title || "").replace(/^File:/, "").replace(/\.[^.]+$/, "");
+    },
+    // 120px is a standard Commons step; tiny originals fall back to thumb_url.
+    docThumb: function (src) {
+      return commonsThumb(src, 120) || src.thumb_url || null;
+    },
+    sourceIncludes: ["caption", "title", "thumb_url", "width"],
+  },
+
   aggregations: [
     {
       name: "depicts",

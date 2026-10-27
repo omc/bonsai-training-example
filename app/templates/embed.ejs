@@ -7,6 +7,7 @@
   <link href="/css/fonts.css" rel="stylesheet">
   <link href="/css/results.css" rel="stylesheet">
   <link href="/css/embed.css" rel="stylesheet">
+  <% if (config.autocomplete) { %><link href="/css/autocomplete.css" rel="stylesheet"><% } %>
 </head>
 <body class="embed">
   <%
@@ -53,7 +54,7 @@
         <circle cx="11" cy="11" r="7"/>
         <path d="M20 20l-3.5-3.5"/>
       </svg>
-      <input name="q" type="text" aria-label="Describe the image you're looking for" value="<%= similarId ? '' : query %>" placeholder="Describe an image<%= indexCount ? ' — search ' + indexCount.toLocaleString() + ' assets' : '' %>..." />
+      <input name="q" type="text" aria-label="Describe the image you're looking for" value="<%= similarId ? '' : query %>" placeholder="Describe an image<%= indexCount ? ' — search ' + indexCount.toLocaleString() + ' assets' : '' %>..."<% if (config.autocomplete) { %> data-autocomplete="/<%= dataset %>/autocomplete" data-asset-base="<%= base %>/asset"<% } %> />
       <button type="submit" class="embed-go">Search</button>
     </form>
 
@@ -114,5 +115,6 @@
 
 <%- include('_embed-foot') %>
   </div>
+  <% if (config.autocomplete) { %><script src="/js/autocomplete.js" defer></script><% } %>
 </body>
 </html>

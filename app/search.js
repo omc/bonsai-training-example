@@ -386,4 +386,128 @@ const similarTopK = async function (index, field, id, k) {
   return { source: { _id: id, _source: sourceSrc }, neighbors: neighbors };
 };
 
-module.exports = { getClient, search, searchSimilar, randomId, similarTopK };
+// Lucene's _english_ stop list, mirrored so agg `include` regexes match the
+// suggest fields, whose analyzers drop these words.
+const STOPWORDS = new Set(
+  ("a an and are as at be but by for if in into is it no not of on or such " +
+    "that the their then there these they this to was will with").split(" "),
+);
+
+// Autocomplete, per https://bonsai.io/blog/how-to-really-scale-autocomplete/:
+// match_phrase_prefix on a search_as_you_type field picks the top documents,
+// and aggregations over just those matches propose completions:
+//   phrases  terms on 2–4 word shingles that start with the typed text
+//   words    significant_terms completing a single typed word
+// The suggest analyzers drop stopwords, leaving a "_" filler in shingles that
+// span one ("sunset over _ bay"). Typed stopwords are matched against the
+// filler and shown as typed; phrases with a filler after the typed text are
+// dropped, since the missing word can't be recovered.
+const autocomplete = async function (config, raw) {
+  var ac = config.autocomplete;
+  var text = String(raw || "").toLowerCase();
+  var empty = { query: raw, suggestions: [], docs: [] };
+  var typedTokens = text.match(/[\p{L}\p{N}]+/gu) || [];
+  var tokens = typedTokens.filter(function (t) {
+    return !STOPWORDS.has(t);
+  });
+  if (!tokens.length || text.trim().length < 2) return empty;
+
+  // A trailing space means the last word is finished: suggest what follows it.
+  var finished = /\s$/.test(text);
+  var pattern = typedTokens.map(function (t, i) {
+    if (!STOPWORDS.has(t)) return t;
+    // An unfinished stopword may still grow into a real word ("the" → "theater").
+    return !finished && i === typedTokens.length - 1 ? "(_|" + t + ")" : "_";
+  });
+  var aggs = {
+    phrases: {
+      terms: {
+        field: ac.phraseField,
+        include: pattern.join(" ") + (finished ? " .*" : ".*"),
+        min_doc_count: ac.minDocCount,
+        size: ac.suggestions * 4,
+      },
+    },
+  };
+  // Lone words only for a single term: significant_terms has no notion of
+  // word order, so "red sp" would complete to unrelated words.
+  if (!finished && typedTokens.length === 1) {
+    aggs.words = {
+      significant_terms: {
+        field: ac.wordField,
+        include: tokens[0] + ".*",
+        min_doc_count: ac.minDocCount,
+        size: ac.suggestions,
+      },
+    };
+  }
+
+  var match = {};
+  match[ac.completionField] = { query: text.trim() };
+  const resp = await getClient(config).search({
+    index: config.index,
+    body: {
+      size: ac.docs * 3,
+      _source: ac.sourceIncludes,
+      query: { match_phrase_prefix: match },
+      aggs: aggs,
+    },
+  });
+  var body = resp.body;
+
+  // Show the typed words in place of their fillers; drop phrases with a
+  // filler past the typed text. Then drop a longer phrase whose shorter prefix
+  // covers the same documents ("red spurfowl galloperdix" under "red spurfowl").
+  var phrases = [];
+  (body.aggregations.phrases.buckets || [])
+    .map(function (b) {
+      var words = b.key.split(" ");
+      var shown = typedTokens.concat(words.slice(typedTokens.length));
+      // An unfinished last word was matched as a prefix: keep the full word.
+      var tail = words[typedTokens.length - 1];
+      if (!finished && tail !== "_") shown[typedTokens.length - 1] = tail;
+      if (shown.indexOf("_") !== -1) return null;
+      return { text: shown.join(" "), count: b.doc_count };
+    })
+    .filter(Boolean)
+    .sort(function (a, b) {
+      return a.text.length - b.text.length;
+    })
+    .forEach(function (p) {
+      var covered = phrases.some(function (k) {
+        return p.text.indexOf(k.text + " ") === 0 && k.count === p.count;
+      });
+      if (!covered) phrases.push(p);
+    });
+  var words = ((body.aggregations.words || {}).buckets || []).map(function (b) {
+    return { text: b.key, count: b.doc_count };
+  });
+
+  var seen = new Set([typedTokens.join(" ")]);
+  var suggestions = words
+    .concat(phrases)
+    .sort(function (a, b) {
+      return b.count - a.count;
+    })
+    .filter(function (s) {
+      if (seen.has(s.text)) return false;
+      seen.add(s.text);
+      return true;
+    })
+    .slice(0, ac.suggestions);
+
+  // Many Commons files share a caption; show each title once.
+  var titles = new Set();
+  var docs = [];
+  (body.hits.hits || []).forEach(function (h) {
+    var title = ac.docTitle(h._source);
+    var key = title.toLowerCase();
+    if (docs.length >= ac.docs || titles.has(key)) return;
+    titles.add(key);
+    docs.push({ id: h._id, title: title, thumb: ac.docThumb(h._source) });
+  });
+
+  return { query: raw, took: body.took, suggestions: suggestions, docs: docs };
+};
+
+module.exports = { getClient, search, searchSimilar, randomId, similarTopK, autocomplete };

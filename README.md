@@ -119,6 +119,7 @@ by a config file in `app/datasets/`; adding a dataset means adding a config.
 | GET | `/:dataset/search?q=...` | Search results (e.g. `/pictures/search?q=eiffel+tower`) |
 | GET | `/:dataset/similar?id=...` | Image-to-image similarity (kNN datasets only, e.g. `/pictures/similar?id=clipart_309_000002.jpg`) |
 | GET | `/:dataset/count` | Document count for the dataset's index (JSON) |
+| GET | `/:dataset/autocomplete?q=...` | Suggestions and matching images as you type (JSON; datasets with an `autocomplete` config, i.e. Multimodal) |
 | GET | `/compare` | Blind A/B similarity eval of two picture indices (see below) |
 | POST | `/compare/choose` | Records a preference and loads the next comparison |
 | GET | `/health` | OpenSearch cluster health (JSON) |
@@ -292,6 +293,38 @@ OpenSearch reports kNN `hits.total` as candidates matched across segments (up to
   id for similarity). ANN results can differ between replicas, so without this,
   consecutive pages could hit different copies and duplicate or skip items.
   Hybrid (Multimodal) searches use the same preference routing.
+
+### Autocomplete
+
+Multimodal's search boxes (home, results, asset page and the embed) suggest
+completions as you type, following
+[How to *really* scale autocomplete](https://bonsai.io/blog/how-to-really-scale-autocomplete/).
+`caption` and `depicts.label` are copied at index time into three suggest
+fields (`multimodal/wikimedia-index.json`):
+
+- `completions`: `search_as_you_type`, queried with `match_phrase_prefix` to
+  pick the matching images (top 4, shown with thumbnails).
+- `suggest_phrase`: 2–4 word shingles; a `terms` agg with an `include` regex
+  on the typed prefix proposes phrase completions.
+- `suggest_word`: single words; `significant_terms` completes a lone word.
+
+Both aggregations run only over the documents the prefix matched, which keeps
+them cheap. The suggest analyzers drop stopwords and leave a `_` filler in
+shingles that span one; typed stopwords are matched against the filler and
+shown as typed. The client (`app/public/js/autocomplete.js`) waits for a 50 ms
+pause in typing, cancels stale requests, caches each prefix, and supports
+arrow keys, Enter and Escape. Responses are sent with `Cache-Control: max-age=300`.
+
+Caveats:
+
+- The aggregations use `fielddata` on text fields, about 100 MB of heap per
+  node for this index. It loads on the first request after a restart or
+  eviction, which can then take around 3 s.
+- The post recommends a separate autocomplete index. These fields live in
+  `wikimedia` alongside the vectors, so autocomplete shares the hybrid
+  search's shards.
+- There is no popularity signal (the post ranks by `views`), so image matches
+  are ordered by match score alone.
 
 ## Blind Similarity Comparison (A/B Eval)
 
