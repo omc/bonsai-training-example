@@ -1,0 +1,195 @@
+/* ---- Single-image asset page ---- */
+
+/* Desktop: photo and details on the left, similar images pinned on the right.
+   Narrow screens stack hero → similar → details so the similar pane isn't
+   buried under the metadata. */
+/* The left column is exactly as wide as the photo will render: the delivered
+   pixel width (--max-w, no upscaling) or whatever keeps it within 76vh tall,
+   whichever is smaller. The similar pane fills the remaining width but never
+   exceeds the photo's; the pair is centred when both hit their caps. */
+.asset-layout {
+    --hero-w: min(var(--max-w, 960px), calc(76vh * var(--ar, 1.5)));
+    display: grid;
+    /* The photo's track can't shrink below its full width unless that would
+       squeeze the pane under 380px (416px = pane minimum + column gap), so
+       leftover space only ever grows the pane, up to the photo's width. */
+    grid-template-columns:
+        minmax(min(var(--hero-w), calc(100% - 416px)), var(--hero-w))
+        minmax(380px, var(--hero-w));
+    justify-content: center;
+    grid-template-areas:
+        "hero similar"
+        "details similar";
+    column-gap: 36px;
+    align-items: start;
+    padding: 16px 28px 56px;
+    position: relative; z-index: 1;
+}
+.asset-hero { grid-area: hero; min-width: 0; }
+.asset-details { grid-area: details; min-width: 0; }
+.asset-similar { grid-area: similar; }
+
+.asset-back {
+    display: inline-block;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: var(--link);
+    text-decoration: none;
+}
+.asset-back:hover { text-decoration: underline; }
+
+/* Sized to the photo's own aspect ratio, so there's no letterboxing. */
+.asset-figure {
+    position: relative;
+    margin: 0;
+    width: min(100%, var(--hero-w));
+    aspect-ratio: var(--ar, 1.5);
+    background: var(--bg-tint);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow-1);
+}
+.asset-figure img {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.asset-hires { opacity: 0; transition: opacity .3s ease; }
+.asset-hires.loaded { opacity: 1; }
+
+.asset-title {
+    margin: 0 0 12px;
+    font-family: var(--font-display);
+    font-size: 28px; font-weight: 400; line-height: 1.2;
+    color: var(--ink);
+}
+.asset-desc {
+    margin: 14px 0 12px;
+    font-size: 15px; line-height: 1.55;
+    color: var(--ink-2);
+    max-width: 75ch;
+}
+
+.asset-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 8px; }
+.asset-btn {
+    font: 600 13px/1 var(--font-ui);
+    color: var(--ink-2);
+    background: var(--bg-elev);
+    border: 1px solid var(--line-2);
+    border-radius: 999px;
+    padding: 9px 16px;
+    text-decoration: none;
+    transition: border-color .15s ease, background .15s ease;
+}
+.asset-btn:hover { border-color: var(--green); }
+.asset-btn.primary { color: #fff; background: var(--green); border-color: var(--green); }
+.asset-btn.primary:hover { background: var(--green-deep); }
+
+/* Metadata: two-column definition lists, grouped by section. */
+/* Columns, not grid, so short sections don't leave holes beside tall ones. */
+.asset-details {
+    columns: 2 340px;
+    column-gap: 32px;
+    margin-top: 12px;
+}
+.asset-section {
+    break-inside: avoid;
+    padding: 18px 0 10px;
+    border-top: 1px solid var(--line);
+}
+.asset-section h2 {
+    margin: 0 0 10px;
+    font-size: 12px; font-weight: 600;
+    letter-spacing: .06em; text-transform: uppercase;
+    color: var(--muted);
+}
+.asset-section dl {
+    display: grid;
+    grid-template-columns: 130px minmax(0, 1fr);
+    gap: 8px 14px;
+    margin: 0;
+    font-size: 14px; line-height: 1.45;
+}
+.asset-section dt { color: var(--muted); }
+.asset-section dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.asset-section a { color: var(--link); text-decoration: none; }
+.asset-section a:hover { text-decoration: underline; }
+.asset-section .ext { font-size: 11px; color: var(--muted); }
+
+.asset-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.asset-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.asset-chip {
+    font-size: 12px;
+    background: var(--bg-tint);
+    border-radius: 999px;
+    padding: 3px 10px;
+}
+.asset-chip .ext { display: none; }
+
+/* Similar pane: sticky under the header, scrolls on its own if it's taller. */
+.asset-similar {
+    position: sticky; top: 84px;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow-1);
+    padding: 16px;
+}
+.asset-similar-head { margin-bottom: 12px; }
+.asset-similar-kicker {
+    display: inline-block;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: .06em; text-transform: uppercase;
+    color: var(--green-deep);
+    background: var(--green-faint);
+    border-radius: 999px;
+    padding: 3px 9px;
+    margin-bottom: 8px;
+}
+.asset-similar-head h2 {
+    margin: 0 0 4px;
+    font-family: var(--font-display);
+    font-size: 22px; font-weight: 400;
+    color: var(--ink);
+}
+.asset-similar-head p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+
+/* Smaller justified rows. Overlays are too small to read here, and raw
+   inner-product scores (~1.8x) mean nothing to a viewer. */
+/* At the pane's 380px minimum, a ratio cap of 1.5 keeps two tiles per row;
+   one wider tile would otherwise sit alone and stretch across the pane. */
+.similar-grid.picture-grid.justified { --row-h: 100px; --ar-max: 1.5; gap: 4px; }
+@media (min-width: 1500px) {
+    .similar-grid.picture-grid.justified { --row-h: 140px; --ar-max: 2; gap: 6px; }
+}
+.similar-grid .jg-overlay, .similar-grid .pic-score { display: none; }
+
+.asset-similar-more {
+    display: block;
+    margin-top: 12px;
+    font-size: 13px; font-weight: 600;
+    color: var(--green);
+    text-decoration: none;
+}
+.asset-similar-more:hover { text-decoration: underline; }
+.asset-empty { font-size: 13px; color: var(--muted); }
+
+@media (max-width: 1000px) {
+    .asset-layout {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "hero" "similar" "details";
+        padding: 12px 16px 40px;
+    }
+    .asset-similar { position: static; max-height: none; overflow: visible; margin: 16px 0 8px; }
+    .asset-figure { margin-inline: auto; }
+    .similar-grid.picture-grid.justified { --row-h: 110px; }
+}
+@media (max-width: 640px) {
+    .asset-title { font-size: 22px; }
+    .asset-details { columns: 1; }
+    .asset-section dl { grid-template-columns: 105px minmax(0, 1fr); font-size: 13px; }
+    .similar-grid.picture-grid.justified { --row-h: 90px; --ar-max: 1.6; }
+}

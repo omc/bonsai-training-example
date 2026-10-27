@@ -7,3 +7,7 @@ node_modules/
 books/books.ndjson
 *.ndjson
 .direnv
+
+# Commons harvest output (multimodal/commons-qi.py)
+multimodal/commons-qi/
+multimodal/commons-qi-hf/

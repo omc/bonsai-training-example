@@ -420,6 +420,50 @@ app.get("/:dataset/similar", async (req, res) => {
   });
 });
 
+// --- Single-image asset page with a similar-images pane (datasets with `asset`) ---
+app.get("/:dataset/asset", async (req, res) => {
+  var config = configs[req.params.dataset];
+  if (!config || !config.asset) return res.status(404).send("Not found");
+
+  var dataset = req.params.dataset;
+  var id = req.query.id ? String(req.query.id) : "";
+  if (!id) return res.redirect("/" + dataset);
+
+  // Where "back" goes. Only local paths, so the param can't redirect off-site.
+  var back = req.query.back ? String(req.query.back) : "";
+  if (!back) {
+    var ref = req.get("Referer") || "";
+    try {
+      var refUrl = new URL(ref);
+      if (refUrl.host === req.get("host") && !refUrl.pathname.endsWith("/asset")) {
+        back = refUrl.pathname + refUrl.search;
+      }
+    } catch (e) {}
+  }
+  if (!back.startsWith("/") || back.startsWith("//")) back = "";
+
+  // The clicked doc comes back as similarSource; neighbors exclude it.
+  var results;
+  try {
+    results = await searchSimilar(config, id, config.asset.similarCount + 1, 0);
+  } catch (err) {
+    if (err.meta && err.meta.statusCode === 404) return res.status(404).send("Image not found");
+    throw err;
+  }
+  var similar = results.body.hits.hits.filter(function (h) {
+    return h._id !== id;
+  }).slice(0, config.asset.similarCount);
+
+  res.render("asset", {
+    config,
+    dataset,
+    id,
+    src: results.body.similarSource,
+    similar,
+    back,
+  });
+});
+
 // --- Start ---
 app.listen(PORT, () => {
   console.log(`Bonsai Search listening on :${PORT}`);

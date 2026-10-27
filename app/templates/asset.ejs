@@ -1,0 +1,135 @@
+<%
+  var title = config.display.titleValue(src);
+  var thumb = config.display.imageData(src);
+  var hires = config.asset.image(src);
+  var description = config.asset.description ? config.asset.description(src) : null;
+  var original = config.display.originalLink ? config.display.originalLink(src) : null;
+  var w = src.width, h = src.height;
+  // Display cap: the pixel width actually delivered, so nothing is upscaled.
+  var maxW = hires ? hires.width : (src.image_width || 384);
+  var similarUrl = '/' + dataset + '/similar?id=' + encodeURIComponent(id);
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  // Values: string | {text, href} | array of those. External links open a new tab.
+  function renderOne(v) {
+    if (v == null || v === '') return '';
+    if (typeof v !== 'object') return esc(v);
+    if (!v.href) return esc(v.text);
+    var ext = /^https?:/.test(v.href);
+    return '<a href="' + esc(v.href) + '"' + (ext ? ' target="_blank" rel="noopener"' : '') + '>' +
+      esc(v.text) + (ext ? ' <span class="ext">&#8599;</span>' : '') + '</a>';
+  }
+  function present(v) {
+    return Array.isArray(v) ? v.length > 0 : (v != null && v !== '');
+  }
+  function assetHref(hitId) {
+    var ps = new URLSearchParams({ id: hitId });
+    if (back) ps.set('back', back);
+    return '/' + dataset + '/asset?' + ps.toString();
+  }
+%>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title><%= title %> &mdash; bonsai</title>
+  <link rel="shortcut icon" type="image/x-icon" href="https://cdn.prod.website-files.com/63c81e4decde60c281417feb/63c81e4decde604e0c417ffb_Favicon.png" />
+  <link href="/css/fonts.css" rel="stylesheet">
+  <link href="/css/results.css" rel="stylesheet">
+  <link href="/css/asset.css" rel="stylesheet">
+</head>
+<body>
+  <div class="bg-wash" aria-hidden="true"></div>
+
+  <header class="app-header">
+    <div class="header-inner">
+      <a href="/<%= dataset %>"><img src="/img/logo.svg" width="100" height="28" alt="bonsai"></a>
+      <form class="search" action="/<%= dataset %>/search" method="get" autocomplete="off" role="search">
+        <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/>
+          <path d="M20 20l-3.5-3.5"/>
+        </svg>
+        <input name="q" type="text" aria-label="Search" placeholder="Search <%= config.label %> images..." />
+      </form>
+    </div>
+  </header>
+
+  <div class="asset-layout" style="--max-w: <%= maxW %>px<% if (w && h) { %>; --ar: <%= (w / h).toFixed(4) %><% } %>">
+    <section class="asset-hero">
+      <a class="asset-back" href="<%= back || '/' + dataset %>">&larr; <%= back ? 'Back to results' : 'New search' %></a>
+
+      <h1 class="asset-title"><%= title %></h1>
+
+      <%# Inline thumbnail shows instantly; the 960px Commons rendition fades in over it. %>
+      <figure class="asset-figure">
+        <% if (thumb) { %>
+        <img class="asset-thumb" src="<%- thumb %>" alt="" aria-hidden="true">
+        <% } %>
+        <% if (hires) { %>
+        <img class="asset-hires" src="<%= hires.url %>" alt="<%= title %>" decoding="async" referrerpolicy="no-referrer"
+             onload="this.classList.add('loaded')" onerror="this.remove()">
+        <% } %>
+      </figure>
+
+      <% if (description) { %>
+      <p class="asset-desc"><%= description %></p>
+      <% } %>
+      <div class="asset-actions">
+        <% if (original) { %><a class="asset-btn" href="<%= original %>" target="_blank" rel="noopener">View on Commons &#8599;</a><% } %>
+        <% if (src.original_url) { %><a class="asset-btn" href="<%= src.original_url %>" target="_blank" rel="noopener">Full resolution &#8599;</a><% } %>
+        <a class="asset-btn primary" href="<%= similarUrl %>">Find similar images &rarr;</a>
+      </div>
+    </section>
+
+    <aside class="asset-similar" aria-labelledby="similar-heading">
+      <div class="asset-similar-head">
+        <span class="asset-similar-kicker">Visual similarity</span>
+        <h2 id="similar-heading">Similar images</h2>
+        <p>Matched on the picture itself using multimodal embeddings &mdash; no keywords, tags or captions involved.</p>
+      </div>
+      <% if (similar.length) { %>
+      <div class="picture-grid justified similar-grid">
+        <% similar.forEach(function(hit) { %>
+        <%- include('_result-tile', { hit: hit, src: hit._source, config: config, dataset: dataset, sourceId: null, tileHref: function(h) { return assetHref(h._id); }, tileTitle: 'View details' }) %>
+        <% }); %>
+      </div>
+      <a class="asset-similar-more" href="<%= similarUrl %>">See all similar images &rarr;</a>
+      <% } else { %>
+      <p class="asset-empty">No similar images found.</p>
+      <% } %>
+    </aside>
+
+    <section class="asset-details">
+      <% config.asset.sections.forEach(function(section) {
+        var rows = section.rows
+          .map(function(r) { return { row: r, value: r.value(src) }; })
+          .filter(function(r) { return present(r.value); });
+        if (!rows.length) return;
+      %>
+      <section class="asset-section">
+        <h2><%= section.title %></h2>
+        <dl>
+          <% rows.forEach(function(r) { %>
+          <dt><%= r.row.label %></dt>
+          <dd>
+            <% if (Array.isArray(r.value) && r.row.chips) { %>
+            <div class="asset-chips"><% r.value.forEach(function(v) { %><span class="asset-chip"><%- renderOne(v) %></span><% }); %></div>
+            <% } else if (Array.isArray(r.value)) { %>
+            <ul class="asset-list"><% r.value.forEach(function(v) { %><li><%- renderOne(v) %></li><% }); %></ul>
+            <% } else { %>
+            <%- renderOne(r.value) %>
+            <% } %>
+          </dd>
+          <% }); %>
+        </dl>
+      </section>
+      <% }); %>
+    </section>
+  </div>
+</body>
+</html>

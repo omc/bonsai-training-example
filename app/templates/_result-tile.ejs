@@ -5,13 +5,73 @@
   var isSource = sourceId && sourceId === hit._id;
   var original = config.display.originalLink ? config.display.originalLink(src) : null;
   var tags = config.display.tags ? config.display.tags(src) : [];
+  // Tiles open the asset page when the dataset has one, else similarity.
   // Callers (e.g. the iframe embed) can route tile clicks elsewhere.
+  var hasAsset = !!config.asset;
   var href = (typeof tileHref === 'function')
     ? tileHref(hit)
-    : '/' + dataset + '/similar?id=' + encodeURIComponent(hit._id);
+    : '/' + dataset + (hasAsset ? '/asset?id=' : '/similar?id=') + encodeURIComponent(hit._id);
+  var linkTitle = (typeof tileTitle === 'string')
+    ? tileTitle
+    : (hasAsset && typeof tileHref !== 'function') ? 'View details' : 'Find images similar to this one';
+  var metaVals = config.display.metaFields
+    .map(function(mf) { return mf.value(src); })
+    .filter(Boolean);
 %>
+<% if (config.display.justified) {
+  // Justified rows: flex-grow and flex-basis both scale with the aspect ratio,
+  // so every tile in a row ends up the same height. Extreme ratios are clamped
+  // (and cropped by object-fit) so one panorama can't flatten a whole row.
+  var ar = config.display.aspectRatio ? config.display.aspectRatio(src) : 1;
+  ar = Math.min(Math.max(ar || 1, 0.6), 2.4);
+  var srcset = config.display.imageSrcset ? config.display.imageSrcset(src) : null;
+  // Rendered width ≈ ratio × row height, plus ~30% for row stretch; mirrors
+  // the --row-h / --ar-max breakpoints in results.css.
+  var sizes = '(max-width: 640px) ' + Math.round(Math.min(ar, 1.6) * 100 * 1.3) + 'px, ' +
+    '(max-width: 1100px) ' + Math.round(ar * 200 * 1.3) + 'px, ' +
+    Math.round(ar * 240 * 1.3) + 'px';
+%>
+<article class="jg-item<%= isSource ? ' pic-source' : '' %>" style="--ar:<%= ar.toFixed(4) %>">
+  <a class="jg-link" href="<%= href %>" title="<%= linkTitle %>">
+    <% if (imgData) { %>
+    <img src="<%- imgData %>" alt="<%= title %>" loading="lazy">
+    <% } %>
+    <% if (srcset) { %>
+    <%# Fades in over the inline thumbnail once loaded; if the CDN fails, the
+        thumbnail stays. %>
+    <img class="jg-hires" srcset="<%= srcset %>" sizes="<%= sizes %>" alt="" aria-hidden="true"
+         loading="lazy" decoding="async" referrerpolicy="no-referrer"
+         onload="this.classList.add('loaded')" onerror="this.remove()">
+    <% } %>
+  </a>
+  <% if (score != null) { %>
+  <span class="pic-score" title="Similarity score"><%= score %></span>
+  <% } %>
+  <% if (isSource) { %>
+  <span class="pic-source-badge">Source image</span>
+  <% } %>
+  <div class="jg-overlay">
+    <h3 class="jg-title" title="<%= title %>"><%= title %></h3>
+    <div class="jg-meta">
+      <% metaVals.forEach(function(val, i) { %>
+      <% if (i > 0) { %><span class="meta-sep">&middot;</span><% } %>
+      <span<%- i === 0 ? ' class="jg-shrink"' : '' %>><%= val %></span>
+      <% }); %>
+      <% if (original) { %>
+      <% if (metaVals.length) { %><span class="meta-sep jg-original-sep">&middot;</span><% } %>
+      <a class="jg-original" href="<%= original %>" target="_blank" rel="noopener">original &#8599;</a>
+      <% } %>
+    </div>
+    <% if (tags.length) { %>
+    <div class="jg-tags">
+      <% tags.forEach(function(t) { %><span class="jg-tag"><%= t %></span><% }); %>
+    </div>
+    <% } %>
+  </div>
+</article>
+<% } else { %>
 <article class="pic-card<%= isSource ? ' pic-source' : '' %>">
-  <a class="pic-link" href="<%= href %>" title="Find images similar to this one">
+  <a class="pic-link" href="<%= href %>" title="<%= linkTitle %>">
     <div class="pic-thumb">
       <% if (imgData) { %>
       <img src="<%- imgData %>" alt="<%= title %>" loading="lazy">
@@ -46,3 +106,4 @@
     <% } %>
   </div>
 </article>
+<% } %>
