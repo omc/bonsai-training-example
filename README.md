@@ -232,11 +232,21 @@ image" badge. Clicking any neighbor pivots the similarity search onto it.
 ### Embeddable search (iframe)
 
 `/embed/pictures` and `/embed/multimodal` are chrome-less versions of those
-searches for embedding in a marketing page: search box, example-query chips, a 12-image grid, Prev/Next
-paging, and click-through image-to-image similarity, all kept inside the frame.
-With no `?q=` it opens on results for the first example query, so the frame is
-never blank. `?q=` sets the initial query. A `layout: "grid"` dataset opts in
-with an `embed: { examples: [...] }` block in its config; other datasets 404.
+searches for embedding in a marketing page: search box, example-query chips, a
+12-image grid and Prev/Next paging, all kept inside the frame. With no `?q=` it
+opens on results for the first example query, so the frame is never blank. `?q=`
+sets the initial query. A `layout: "grid"` dataset opts in with an
+`embed: { examples: [...] }` block in its config; other datasets 404.
+
+What a click does depends on the dataset:
+
+- **Multimodal** (has an `asset` config): facet filters beside the results, and
+  tiles open `/embed/multimodal/asset?id=`, the in-frame asset page with the
+  photo, metadata and similar-images pane. Its back link returns to the exact
+  filtered results page. `embed.facets` picks and orders the facets shown,
+  `embed.facetSize` trims rows per facet, and `embed.openFacets` sets how many
+  start expanded, so the sidebar stays about as tall as the results.
+- **Pictures**: tiles run image-to-image similarity in the frame.
 
 ```html
 <iframe id="bonsai-search" src="https://<app-host>/embed/pictures"
@@ -244,16 +254,26 @@ with an `embed: { examples: [...] }` block in its config; other datasets 404.
         style="width:100%;height:1260px;border:0"></iframe>
 <script>
   // Optional: resize the iframe to its content (no inner scrollbar).
+  var frame = document.getElementById("bonsai-search");
   window.addEventListener("message", function (e) {
-    if (e.origin !== "https://<app-host>") return;
-    if (!e.data || e.data.type !== "bonsai-embed:height") return;
-    document.getElementById("bonsai-search").style.height = e.data.height + "px";
+    if (e.origin !== "https://<app-host>" || !e.data) return;
+    if (e.data.type === "bonsai-embed:height") {
+      frame.style.height = e.data.height + "px";
+    }
+    // Optional: after a click inside the frame, bring its top back into view.
+    if (e.data.type === "bonsai-embed:navigate" && frame.getBoundingClientRect().top < 0) {
+      frame.scrollIntoView({ behavior: "smooth" });
+    }
   });
 </script>
 ```
 
-The page posts `{type: "bonsai-embed:height", height}` to its parent whenever its
-height changes. The body is transparent so the host background shows through.
+Each page posts `{type: "bonsai-embed:height", height}` to its parent whenever its
+height changes, and `{type: "bonsai-embed:navigate", path}` once per load. Without
+the navigate handler, clicking a tile far down the grid opens the asset page with
+the host still scrolled to that spot. Inside the frame, `vh` units and sticky
+positioning are swapped for fixed values (`embed.css`), since the frame's height
+tracks its content. The body is transparent so the host background shows through.
 Page size is `EMBED_PER_PAGE` in `server.js`.
 
 Framing is allowed from any origin by default (`Content-Security-Policy:

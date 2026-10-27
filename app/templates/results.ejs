@@ -71,40 +71,16 @@
   %>
   <div class="layout<%= (isGrid && !hasFilters) ? ' layout-grid' : '' %><%= config.display.justified ? ' layout-wide' : '' %>">
     <% if (hasFilters) { %>
-    <button class="filters-toggle" type="button" aria-expanded="false" aria-controls="filters-panel">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="12" y1="18" x2="20" y2="18"/></svg>
-      Filters
-    </button>
-    <aside class="filters" id="filters-panel">
-      <h2>Filters</h2>
-
-      <% config.aggregations.forEach(function(aggConf) {
-        var aggData = aggs[aggConf.name];
-        if (!aggData || !aggData.buckets || !aggData.buckets.length) return;
-        var buckets = aggData.buckets;
-        if (aggConf.hideEmpty) {
-          buckets = buckets.filter(function(b) { return b.doc_count > 0; });
-        }
-        if (!buckets.length) return;
-      %>
-      <div class="filter-group">
-        <h3>
-          <%= aggConf.label %>
-          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </h3>
-        <div class="filter-body">
-          <% buckets.forEach(function(b) {
-            var displayLabel = aggConf.formatBucket ? aggConf.formatBucket(b) : b.key;
-            var checkboxValue = aggConf.bucketValue ? aggConf.bucketValue(b) : b.key;
-          %>
-          <label class="filter-row"><input type="checkbox" name="<%= aggConf.name %>" value="<%= checkboxValue %>"<%= isChecked(aggConf.name, checkboxValue) ? ' checked' : '' %> /> <%= displayLabel %> <span class="count"><%= b.doc_count %></span></label>
-          <% }); %>
-        </div>
-      </div>
-      <% }); %>
-
-      <a class="clear-btn" href="/<%= dataset %>/search?q=<%= encodeURIComponent(query) %><%= (typeof role !== 'undefined' && role) ? '&role=' + encodeURIComponent(role) : '' %>">Clear all filters</a>
-    </aside>
+    <%
+      var clearParams = new URLSearchParams({ q: query });
+      if (typeof role !== 'undefined' && role) clearParams.set('role', role);
+    %>
+    <%- include('_filters', {
+      config: config, aggs: aggs, filters: f,
+      action: '/' + dataset + '/search',
+      hidden: { q: query, role: (typeof role !== 'undefined' ? role : null) },
+      clearHref: '/' + dataset + '/search?' + clearParams.toString(),
+    }) %>
     <% } %>
 
     <main class="results">
@@ -202,36 +178,5 @@
     </div>
   </footer>
 
-  <script>
-    document.querySelectorAll('.filter-group h3').forEach(function (h) {
-      h.addEventListener('click', function () {
-        h.parentElement.classList.toggle('collapsed');
-      });
-    });
-
-    var toggle = document.querySelector('.filters-toggle');
-    var panel = document.getElementById('filters-panel');
-    if (toggle && panel) {
-      toggle.addEventListener('click', function () {
-        var open = panel.classList.toggle('open');
-        toggle.setAttribute('aria-expanded', String(open));
-      });
-    }
-
-    document.querySelectorAll('.filters input[type="checkbox"]').forEach(function (cb) {
-      cb.addEventListener('change', function () {
-        var params = new URLSearchParams();
-        params.set('q', '<%= query.replace(/'/g, "\\'") %>');
-        var roleSelect = document.querySelector('.role-select');
-        if (roleSelect && roleSelect.value) {
-          params.set('role', roleSelect.value);
-        }
-        document.querySelectorAll('.filters input[type="checkbox"]:checked').forEach(function (checked) {
-          params.append(checked.name, checked.value);
-        });
-        window.location.href = '/<%= dataset %>/search?' + params.toString();
-      });
-    });
-  </script>
 </body>
 </html>

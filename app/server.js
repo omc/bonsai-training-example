@@ -216,10 +216,17 @@ app.post("/compare/choose", (req, res) => {
 
 // --- Embeddable image search (iframe) ---
 // Chrome-less grid search for marketing pages, for datasets with an `embed`
-// config. Text search and image-to-image similarity both stay inside the frame.
+// config. Search, facets, asset pages and image-to-image similarity all stay
+// inside the frame.
 // Set EMBED_FRAME_ANCESTORS to restrict which sites may frame it
 // (space-separated origins); defaults to any.
 const EMBED_PER_PAGE = 12;
+
+app.get("/embed/:dataset/asset", function (req, res) {
+  var config = configs[req.params.dataset];
+  if (!config || !config.embed) return res.status(404).send("Not found");
+  return renderAsset(req, res, true);
+});
 
 app.get("/embed/:dataset", async (req, res) => {
   var config = configs[req.params.dataset];
@@ -237,6 +244,12 @@ app.get("/embed/:dataset", async (req, res) => {
   var similarId = req.query.id ? String(req.query.id) : null;
   var page = Math.max(1, parseInt(req.query.page, 10) || 1);
   var from = (page - 1) * EMBED_PER_PAGE;
+  var filters = {};
+  if (!similarId) {
+    config.aggregations.forEach(function (agg) {
+      if (req.query[agg.name]) filters[agg.name] = [].concat(req.query[agg.name]).map(String);
+    });
+  }
 
   var results = null;
   var error = null;
@@ -244,7 +257,7 @@ app.get("/embed/:dataset", async (req, res) => {
     if (similarId) {
       results = await searchSimilar(config, similarId, EMBED_PER_PAGE, from);
     } else if (query.trim()) {
-      results = await search(config, query, EMBED_PER_PAGE, {}, from);
+      results = await search(config, query, EMBED_PER_PAGE, filters, from);
     }
   } catch (err) {
     console.error("embed search failed:", err.message);
@@ -268,6 +281,9 @@ app.get("/embed/:dataset", async (req, res) => {
     results,
     error,
     examples,
+    filters,
+    // Asset pages link "back" here.
+    selfUrl: req.originalUrl,
     indexCount: await getIndexCount(config),
   });
 });
@@ -421,15 +437,19 @@ app.get("/:dataset/similar", async (req, res) => {
 });
 
 // --- Single-image asset page with a similar-images pane (datasets with `asset`) ---
-app.get("/:dataset/asset", async (req, res) => {
+// Shared by /:dataset/asset and the iframe's /embed/:dataset/asset; `embed`
+// keeps every link and the back target inside /embed/.
+async function renderAsset(req, res, embed) {
   var config = configs[req.params.dataset];
   if (!config || !config.asset) return res.status(404).send("Not found");
 
   var dataset = req.params.dataset;
+  var home = (embed ? "/embed/" : "/") + dataset;
   var id = req.query.id ? String(req.query.id) : "";
-  if (!id) return res.redirect("/" + dataset);
+  if (!id) return res.redirect(home);
 
-  // Where "back" goes. Only local paths, so the param can't redirect off-site.
+  // Where "back" goes: a local path under `home`, so the param can't send the
+  // page (or the frame) off-site.
   var back = req.query.back ? String(req.query.back) : "";
   if (!back) {
     var ref = req.get("Referer") || "";
@@ -440,7 +460,7 @@ app.get("/:dataset/asset", async (req, res) => {
       }
     } catch (e) {}
   }
-  if (!back.startsWith("/") || back.startsWith("//")) back = "";
+  if (back.startsWith("//") || !(back === home || back.startsWith(home + "?") || back.startsWith(home + "/"))) back = "";
 
   // The clicked doc comes back as similarSource; neighbors exclude it.
   var results;
@@ -454,6 +474,12 @@ app.get("/:dataset/asset", async (req, res) => {
     return h._id !== id;
   }).slice(0, config.asset.similarCount);
 
+  if (embed) {
+    res.setHeader(
+      "Content-Security-Policy",
+      "frame-ancestors " + (process.env.EMBED_FRAME_ANCESTORS || "*"),
+    );
+  }
   res.render("asset", {
     config,
     dataset,
@@ -461,7 +487,12 @@ app.get("/:dataset/asset", async (req, res) => {
     src: results.body.similarSource,
     similar,
     back,
+    embed,
   });
+}
+
+app.get("/:dataset/asset", function (req, res) {
+  return renderAsset(req, res, false);
 });
 
 // --- Start ---

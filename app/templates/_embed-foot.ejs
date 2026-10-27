@@ -1,0 +1,24 @@
+    <footer class="embed-footer">
+      <a href="https://bonsai.io/" target="_blank" rel="noopener">Powered by Bonsai multimodal search</a>
+    </footer>
+
+  <script>
+    // Messages to the host page:
+    //   bonsai-embed:height   content height, so the iframe can size itself
+    //                         without scrollbars
+    //   bonsai-embed:navigate sent once per page load, so the host can scroll
+    //                         the frame's top into view after a click inside it
+    (function () {
+      if (window.parent === window) return;
+      window.parent.postMessage({ type: 'bonsai-embed:navigate', path: location.pathname + location.search }, '*');
+      var last = 0;
+      function post() {
+        var h = document.documentElement.scrollHeight;
+        if (h === last) return;
+        last = h;
+        window.parent.postMessage({ type: 'bonsai-embed:height', height: h }, '*');
+      }
+      new ResizeObserver(post).observe(document.body);
+      window.addEventListener('load', post);
+    })();
+  </script>

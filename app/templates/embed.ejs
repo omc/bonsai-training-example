@@ -15,10 +15,18 @@
     var totalCount = (typeof total === 'object') ? total.value : total;
     var pageable = config.query.paginationDepth ? Math.min(totalCount, config.query.paginationDepth) : totalCount;
     var totalPages = Math.ceil(pageable / perPage);
+    var aggs = (results && results.body.aggregations) || {};
     var base = '/embed/' + dataset;
+    var f = filters || {};
 
-    function searchUrl(q, p) {
+    // Filters ride along on paging, and reset on a new query or example.
+    function searchUrl(q, p, keepFilters) {
       var ps = new URLSearchParams({ q: q });
+      if (keepFilters) {
+        Object.keys(f).forEach(function(k) {
+          [].concat(f[k]).forEach(function(v) { ps.append(k, v); });
+        });
+      }
       if (p > 1) ps.set('page', p);
       return base + '?' + ps.toString();
     }
@@ -29,8 +37,14 @@
       return base + '?' + ps.toString();
     }
     function pageUrl(p) {
-      return similarId ? similarUrl(similarId, p) : searchUrl(query, p);
+      return similarId ? similarUrl(similarId, p) : searchUrl(query, p, true);
     }
+    // Tiles open the in-frame asset page when the dataset has one.
+    function tileUrl(hit) {
+      if (!config.asset) return similarUrl(hit._id, 1);
+      return base + '/asset?' + new URLSearchParams({ id: hit._id, back: selfUrl }).toString();
+    }
+    var hasFilters = !similarId && results && config.aggregations && config.aggregations.length;
   %>
 
   <div class="embed-shell<%= config.display.justified ? ' embed-wide' : '' %>">
@@ -46,7 +60,7 @@
     <div class="embed-examples" aria-label="Example searches">
       <span class="embed-examples-label">Try:</span>
       <% examples.forEach(function(ex) { %>
-      <a class="embed-chip<%= (!similarId && ex === query) ? ' active' : '' %>" href="<%= searchUrl(ex, 1) %>"><%= ex %></a>
+      <a class="embed-chip<%= (!similarId && ex === query) ? ' active' : '' %>" href="<%= searchUrl(ex, 1, false) %>"><%= ex %></a>
       <% }); %>
     </div>
 
@@ -56,51 +70,49 @@
       <% } else if (similarId) { %>
       <span>Visually similar to <em><%= similarLabel %></em></span>
       <span class="meta-sep">&middot;</span>
-      <a href="<%= query.trim() ? searchUrl(query, 1) : base %>">&larr; back to results</a>
+      <a href="<%= query.trim() ? searchUrl(query, 1, false) : base %>">&larr; back to results</a>
       <% } else if (results) { %>
       <span>Results for <em>&ldquo;<%= query %>&rdquo;</em></span>
       <span class="meta-sep">&middot;</span>
-      <span class="embed-hint">click any image to find similar ones</span>
+      <span class="embed-hint"><%= config.asset ? 'click any image for details and similar images' : 'click any image to find similar ones' %></span>
       <% } %>
     </div>
 
-    <% if (results && !hits.length && !error) { %>
-    <p class="embed-empty">No images found.</p>
-    <% } %>
+    <div class="embed-layout<%= hasFilters ? ' has-filters' : '' %>">
+      <% if (hasFilters) { %>
+      <%- include('_filters', {
+        config: config, aggs: aggs, filters: f,
+        action: base,
+        hidden: { q: query },
+        clearHref: searchUrl(query, 1, false),
+        facetNames: config.embed.facets || null,
+        bucketLimit: config.embed.facetSize || null,
+        openGroups: config.embed.openFacets || null,
+      }) %>
+      <% } %>
 
-    <div class="picture-grid<%= config.display.justified ? ' justified' : '' %>">
-      <% hits.forEach(function(hit) { %>
-      <%- include('_result-tile', { hit: hit, src: hit._source, config: config, dataset: dataset, sourceId: similarId, tileHref: function(h) { return similarUrl(h._id, 1); } }) %>
-      <% }); %>
+      <main class="embed-results">
+        <% if (results && !hits.length && !error) { %>
+        <p class="embed-empty">No images found.</p>
+        <% } %>
+
+        <div class="picture-grid<%= config.display.justified ? ' justified' : '' %>">
+          <% hits.forEach(function(hit) { %>
+          <%- include('_result-tile', { hit: hit, src: hit._source, config: config, dataset: dataset, sourceId: similarId, tileHref: tileUrl, tileTitle: config.asset ? 'View details' : 'Find images similar to this one' }) %>
+          <% }); %>
+        </div>
+
+        <% if (totalPages > 1) { %>
+        <nav class="pagination embed-pager" aria-label="Result pages">
+          <% if (page > 1) { %><a class="page-arrow" href="<%= pageUrl(page - 1) %>">&laquo; Prev</a><% } %>
+          <span class="embed-page-of">Page <%= page %> of <%= totalPages %></span>
+          <% if (page < totalPages) { %><a class="page-arrow" href="<%= pageUrl(page + 1) %>">Next &raquo;</a><% } %>
+        </nav>
+        <% } %>
+      </main>
     </div>
 
-    <% if (totalPages > 1) { %>
-    <nav class="pagination embed-pager" aria-label="Result pages">
-      <% if (page > 1) { %><a class="page-arrow" href="<%= pageUrl(page - 1) %>">&laquo; Prev</a><% } %>
-      <span class="embed-page-of">Page <%= page %> of <%= totalPages %></span>
-      <% if (page < totalPages) { %><a class="page-arrow" href="<%= pageUrl(page + 1) %>">Next &raquo;</a><% } %>
-    </nav>
-    <% } %>
-
-    <footer class="embed-footer">
-      <a href="https://bonsai.io/" target="_blank" rel="noopener">Powered by Bonsai multimodal search</a>
-    </footer>
+<%- include('_embed-foot') %>
   </div>
-
-  <script>
-    // Report content height so the host page can size the iframe without scrollbars.
-    (function () {
-      if (window.parent === window) return;
-      var last = 0;
-      function post() {
-        var h = document.documentElement.scrollHeight;
-        if (h === last) return;
-        last = h;
-        window.parent.postMessage({ type: 'bonsai-embed:height', height: h }, '*');
-      }
-      new ResizeObserver(post).observe(document.body);
-      window.addEventListener('load', post);
-    })();
-  </script>
 </body>
 </html>

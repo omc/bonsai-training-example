@@ -8,7 +8,7 @@
    whichever is smaller. The similar pane fills the remaining width but never
    exceeds the photo's; the pair is centred when both hit their caps. */
 .asset-layout {
-    --hero-w: min(var(--max-w, 960px), calc(76vh * var(--ar, 1.5)));
+    --hero-w: min(var(--max-w, 960px), calc(var(--hero-vh, 76vh) * var(--ar, 1.5)));
     display: grid;
     /* The photo's track can't shrink below its full width unless that would
        squeeze the pane under 380px (416px = pane minimum + column gap), so

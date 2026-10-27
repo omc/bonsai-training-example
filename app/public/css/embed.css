@@ -64,6 +64,21 @@ body.embed {
 
 .embed-empty { color: var(--muted); font-size: 14px; }
 
+/* Facet sidebar beside the results; collapses to a toggle on narrow frames
+   (the 880px breakpoint in results.css). */
+.embed-layout.has-filters {
+    display: grid;
+    grid-template-columns: 210px minmax(0, 1fr);
+    gap: 28px;
+}
+.embed-results { min-width: 0; }
+
+/* The frame grows to fit its content, so anything sized from the viewport
+   (vh, sticky offsets) would chase its own height. Pin those to fixed values. */
+.embed aside.filters { position: static; max-height: none; overflow: visible; }
+.embed .asset-layout { --hero-vh: 620px; padding: 16px 16px 8px; }
+.embed .asset-similar { position: static; max-height: none; overflow: visible; }
+
 /* Raw similarity scores mean little to a marketing audience. */
 .embed .pic-score { display: none; }
 
@@ -77,6 +92,10 @@ body.embed {
 }
 .embed-footer a { color: var(--muted); text-decoration: none; }
 .embed-footer a:hover { color: var(--green); }
+
+@media (max-width: 880px) {
+    .embed-layout.has-filters { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+}
 
 @media (max-width: 640px) {
     .embed-shell { padding: 12px; }

@@ -1,0 +1,89 @@
+<%
+  // Facet sidebar shared by the results page and the iframe embed. A plain GET
+  // form: ticking a box resubmits with every checked value plus the `hidden`
+  // params (q, role…), so no query text is ever spliced into script.
+  //   action      form target
+  //   hidden      { name: value } carried through on every change
+  //   clearHref   "Clear all filters" link
+  //   facetNames  optional subset/order of config.aggregations names
+  //   bucketLimit optional max rows per facet
+  //   openGroups  optional number of facets expanded; the rest start collapsed
+  var f = filters || {};
+  var aggConfs = config.aggregations;
+  if (typeof facetNames !== 'undefined' && facetNames) {
+    aggConfs = facetNames
+      .map(function(n) { return config.aggregations.find(function(a) { return a.name === n; }); })
+      .filter(Boolean);
+  }
+  var limit = (typeof bucketLimit !== 'undefined' && bucketLimit) ? bucketLimit : Infinity;
+  var open = (typeof openGroups !== 'undefined' && openGroups) ? openGroups : Infinity;
+  function isChecked(param, val) {
+    return f[param] && f[param].indexOf(String(val)) !== -1;
+  }
+  var shown = 0;
+%>
+<button class="filters-toggle" type="button" aria-expanded="false" aria-controls="filters-panel">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="12" y1="18" x2="20" y2="18"/></svg>
+  Filters
+</button>
+<aside class="filters" id="filters-panel">
+  <form method="get" action="<%= action %>">
+    <h2>Filters</h2>
+    <% Object.keys(hidden || {}).forEach(function(name) {
+      if (hidden[name] == null || hidden[name] === '') return; %>
+    <input type="hidden" name="<%= name %>" value="<%= hidden[name] %>">
+    <% }); %>
+
+    <% aggConfs.forEach(function(aggConf) {
+      var aggData = aggs[aggConf.name];
+      if (!aggData || !aggData.buckets || !aggData.buckets.length) return;
+      var buckets = aggData.buckets;
+      if (aggConf.hideEmpty) {
+        buckets = buckets.filter(function(b) { return b.doc_count > 0; });
+      }
+      // Always keep checked values visible, even past the row limit.
+      buckets = buckets.filter(function(b, i) {
+        var v = aggConf.bucketValue ? aggConf.bucketValue(b) : b.key;
+        return i < limit || isChecked(aggConf.name, v);
+      });
+      if (!buckets.length) return;
+      var anyChecked = (f[aggConf.name] || []).length > 0;
+      var collapsed = shown++ >= open && !anyChecked;
+    %>
+    <div class="filter-group<%= collapsed ? ' collapsed' : '' %>">
+      <h3>
+        <%= aggConf.label %>
+        <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </h3>
+      <div class="filter-body">
+        <% buckets.forEach(function(b) {
+          var displayLabel = aggConf.formatBucket ? aggConf.formatBucket(b) : b.key;
+          var checkboxValue = aggConf.bucketValue ? aggConf.bucketValue(b) : b.key;
+        %>
+        <label class="filter-row"><input type="checkbox" name="<%= aggConf.name %>" value="<%= checkboxValue %>"<%= isChecked(aggConf.name, checkboxValue) ? ' checked' : '' %> onchange="this.form.submit()" /> <%= displayLabel %> <span class="count"><%= b.doc_count %></span></label>
+        <% }); %>
+      </div>
+    </div>
+    <% }); %>
+
+    <noscript><button type="submit" class="clear-btn">Apply filters</button></noscript>
+    <a class="clear-btn" href="<%= clearHref %>">Clear all filters</a>
+  </form>
+</aside>
+<script>
+  (function () {
+    document.querySelectorAll('.filter-group h3').forEach(function (h) {
+      h.addEventListener('click', function () {
+        h.parentElement.classList.toggle('collapsed');
+      });
+    });
+    var toggle = document.querySelector('.filters-toggle');
+    var panel = document.getElementById('filters-panel');
+    if (toggle && panel) {
+      toggle.addEventListener('click', function () {
+        var isOpen = panel.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', String(isOpen));
+      });
+    }
+  })();
+</script>

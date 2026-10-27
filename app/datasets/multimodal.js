@@ -123,6 +123,12 @@ module.exports = {
       "old steam train",
       "coffee cup",
     ],
+    // A shorter facet list for the marketing frame (aggregation names, in
+    // order), trimmed rows, and only the first few expanded so the sidebar
+    // doesn't outgrow 12 results.
+    facets: ["depicts", "assessment", "license", "attribution", "taken", "resolution", "country", "camera"],
+    facetSize: 6,
+    openFacets: 4,
   },
 
   aggregations: [

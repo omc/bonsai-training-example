@@ -7,7 +7,11 @@
   var w = src.width, h = src.height;
   // Display cap: the pixel width actually delivered, so nothing is upscaled.
   var maxW = hires ? hires.width : (src.image_width || 384);
-  var similarUrl = '/' + dataset + '/similar?id=' + encodeURIComponent(id);
+  // The iframe embed renders this page too; its links must stay under /embed/.
+  var isEmbed = typeof embed !== 'undefined' && embed;
+  var base = (isEmbed ? '/embed/' : '/') + dataset;
+  var searchPrefix = isEmbed ? base + '?' : base + '/search?';
+  var similarUrl = (isEmbed ? base + '?id=' : base + '/similar?id=') + encodeURIComponent(id);
 
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
@@ -20,7 +24,9 @@
     if (typeof v !== 'object') return esc(v);
     if (!v.href) return esc(v.text);
     var ext = /^https?:/.test(v.href);
-    return '<a href="' + esc(v.href) + '"' + (ext ? ' target="_blank" rel="noopener"' : '') + '>' +
+    // Config hrefs like "search?q=…" are relative to the dataset's search.
+    var href = v.href.indexOf('search?') === 0 ? searchPrefix + v.href.slice(7) : v.href;
+    return '<a href="' + esc(href) + '"' + (ext ? ' target="_blank" rel="noopener"' : '') + '>' +
       esc(v.text) + (ext ? ' <span class="ext">&#8599;</span>' : '') + '</a>';
   }
   function present(v) {
@@ -29,7 +35,7 @@
   function assetHref(hitId) {
     var ps = new URLSearchParams({ id: hitId });
     if (back) ps.set('back', back);
-    return '/' + dataset + '/asset?' + ps.toString();
+    return base + '/asset?' + ps.toString();
   }
 %>
 <!doctype html>
@@ -42,8 +48,10 @@
   <link href="/css/fonts.css" rel="stylesheet">
   <link href="/css/results.css" rel="stylesheet">
   <link href="/css/asset.css" rel="stylesheet">
+  <% if (isEmbed) { %><link href="/css/embed.css" rel="stylesheet"><% } %>
 </head>
-<body>
+<body<%- isEmbed ? ' class="embed embed-asset"' : '' %>>
+  <% if (!isEmbed) { %>
   <div class="bg-wash" aria-hidden="true"></div>
 
   <header class="app-header">
@@ -58,10 +66,11 @@
       </form>
     </div>
   </header>
+  <% } %>
 
   <div class="asset-layout" style="--max-w: <%= maxW %>px<% if (w && h) { %>; --ar: <%= (w / h).toFixed(4) %><% } %>">
     <section class="asset-hero">
-      <a class="asset-back" href="<%= back || '/' + dataset %>">&larr; <%= back ? 'Back to results' : 'New search' %></a>
+      <a class="asset-back" href="<%= back || base %>">&larr; <%= back ? 'Back to results' : 'New search' %></a>
 
       <h1 class="asset-title"><%= title %></h1>
 
@@ -131,5 +140,8 @@
       <% }); %>
     </section>
   </div>
+  <% if (isEmbed) { %>
+  <div class="embed-shell embed-wide"><%- include('_embed-foot') %></div>
+  <% } %>
 </body>
 </html>
