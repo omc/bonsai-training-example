@@ -24,6 +24,13 @@ const sourceFilter = function (config) {
   );
 };
 
+// Documents a dataset never returns (config.query.exclude, must_not clauses),
+// as one filter clause; null when there are none.
+const exclusionFilter = function (config) {
+  var exclude = config.query.exclude;
+  return exclude && exclude.length ? { bool: { must_not: exclude } } : null;
+};
+
 // Build a kNN vector-search body. OpenSearch needs k >= from + size; a fixed
 // paginationDepth keeps the candidate pool (and so the ranking) stable across pages.
 const getKnnQuery = function (config, vector, size, from) {
@@ -39,6 +46,8 @@ const getKnnQuery = function (config, vector, size, from) {
     },
     _source: sourceFilter(config),
   };
+  var exclusion = exclusionFilter(config);
+  if (exclusion) body.query.knn[field].filter = exclusion;
   return body;
 };
 
@@ -206,6 +215,9 @@ const buildFilterClauses = function (config, filters, permissions) {
   if (permissions && permissions.length) {
     filterClauses.push({ terms: { permissions: permissions } });
   }
+
+  var exclusion = exclusionFilter(config);
+  if (exclusion) filterClauses.push(exclusion);
 
   // --- apply filter clauses from sidebar selections ---
 
@@ -444,12 +456,15 @@ const autocomplete = async function (config, raw) {
 
   var match = {};
   match[ac.completionField] = { query: text.trim() };
+  var query = { match_phrase_prefix: match };
+  var exclusion = exclusionFilter(config);
+  if (exclusion) query = { bool: { must: query, filter: [exclusion] } };
   const resp = await getClient(config).search({
     index: config.index,
     body: {
       size: ac.docs * 3,
       _source: ac.sourceIncludes,
-      query: { match_phrase_prefix: match },
+      query: query,
       aggs: aggs,
     },
   });

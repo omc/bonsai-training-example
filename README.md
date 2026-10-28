@@ -326,6 +326,20 @@ Caveats:
 - There is no popularity signal (the post ranks by `views`), so image matches
   are ordered by match score alone.
 
+### Content flags
+
+`multimodal/content_flags.py` flags images whose text has profanity, hate
+speech, sexual content or nudity, as a `content_flags` column in the Parquet
+dataset and a keyword field in the index. Multimodal's `query.exclude`
+(`exists: content_flags`) keeps every flagged image out of search results,
+facet counts, similar images and autocomplete. A flagged asset page still opens
+by direct URL. After changing the rules or `content-flags-overrides.json`, refresh
+the dataset and the live index (partial updates, no re-embedding):
+
+```bash
+uv run multimodal/commons-qi-flags.py --update-index
+```
+
 ## Blind Similarity Comparison (A/B Eval)
 
 `/compare` is a blind A/B harness for judging two image-embedding models against

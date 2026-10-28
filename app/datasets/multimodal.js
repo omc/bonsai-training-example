@@ -96,6 +96,10 @@ module.exports = {
       ],
     },
     knn: { field: "image__bonsai_multimodal_01", k: 50 },
+    // Never return images flagged for profanity, hate, sexual content or
+    // nudity (multimodal/content_flags.py). Applies to search, similar
+    // images and autocomplete.
+    exclude: [{ exists: { field: "content_flags" } }],
     sourceIncludes: [
       "pageid",
       "title",

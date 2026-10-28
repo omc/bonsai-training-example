@@ -31,6 +31,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from PIL import Image
 
+import content_flags
+
 MAX_SHARD_BYTES = 500 * 1000 * 1000
 ROWS_PER_GROUP = 500  # ~20 MB row groups keep the HF viewer happy
 
@@ -79,6 +81,8 @@ SCHEMA = pa.schema([
     ("image", pa.string()),
     ("image_width", pa.int32()),
     ("image_height", pa.int32()),
+    ("content_flags", pa.list_(pa.string())),
+    ("content_flag_reasons", pa.list_(pa.string())),
 ])
 
 
@@ -117,7 +121,7 @@ def place(c):
             "country": c.get("country"), "region": c.get("region")}
 
 
-def to_row(r, path):
+def to_row(r, path, overrides):
     exif = r.get("exif") or {}
     coords = r.get("coordinates") or {}
     loc = r.get("location")
@@ -125,7 +129,7 @@ def to_row(r, path):
         data = f.read()
     with Image.open(path) as img:
         w, h = img.size
-    return {
+    row = {
         "pageid": r["pageid"],
         "title": r["title"],
         "file_page": r["file_page"],
@@ -170,6 +174,8 @@ def to_row(r, path):
         "image_width": w,
         "image_height": h,
     }
+    row["content_flags"], row["content_flag_reasons"] = content_flags.apply(row, overrides)
+    return row
 
 
 class ShardWriter:
@@ -219,7 +225,7 @@ is CC0; Commons file description text is CC BY-SA 4.0.
 """
 
 
-def write_card(out, stats, licences, shards):
+def write_card(out, stats, licences, shards, flags):
     rows = stats["rows"]
     licence_lines = "\n".join(f"| {lic} | {n:,} |" for lic, n in licences.most_common())
     card = f"""---
@@ -301,8 +307,8 @@ derivatives to be shared under the same licence.
 | `original_url`, `thumb_url` | string | upload.wikimedia.org URLs |
 | `image` | string | `data:image/webp;base64,...`, max 384px side |
 | `image_width`, `image_height` | int | size of the inlined WebP |
-
-## Loading
+{content_flags.CARD_COLUMNS}
+{content_flags.card_section(flags, rows)}## Loading
 
 ```python
 import base64, io
@@ -338,7 +344,8 @@ def main():
     os.makedirs(data_dir, exist_ok=True)
 
     shards = ShardWriter(tmp_dir, args.max_mb * 1000 * 1000)
-    stats, licences, seen, batch = Counter(), Counter(), set(), []
+    stats, licences, flags, seen, batch = Counter(), Counter(), Counter(), set(), []
+    overrides = content_flags.load_overrides()
     started = time.monotonic()
     with open(os.path.join(args.src, "meta.ndjson"), encoding="utf-8") as f:
         for line in f:
@@ -350,7 +357,10 @@ def main():
             if not os.path.exists(path):
                 stats["no_image"] += 1
                 continue
-            batch.append(to_row(r, path))
+            row = to_row(r, path, overrides)
+            flags.update(row["content_flags"])
+            flags["_any"] += bool(row["content_flags"])
+            batch.append(row)
             licences[r["license"]] += 1
             stats["rows"] += 1
             if len(batch) == ROWS_PER_GROUP:
@@ -371,7 +381,7 @@ def main():
         largest = max(largest, os.path.getsize(path))
         os.replace(path, os.path.join(data_dir, f"train-{i:05d}-of-{total:05d}.parquet"))
     os.rmdir(tmp_dir)
-    write_card(args.out, stats, licences, total)
+    write_card(args.out, stats, licences, total, flags)
     log(f"done: {stats['rows']:,} rows in {total} shards (largest {largest / 1e6:.0f} MB), "
         f"{stats['no_image']:,} records without an image skipped -> {args.out}")
 

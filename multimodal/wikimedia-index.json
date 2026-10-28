@@ -141,6 +141,8 @@
         }
       },
       "image_width": { "type": "short" },
+      "content_flags": { "type": "keyword" },
+      "content_flag_reasons": { "type": "keyword", "index": false, "doc_values": false },
       "image_height": { "type": "short" },
       "completions": { "type": "search_as_you_type", "max_shingle_size": 3 },
       "suggest_word": {
