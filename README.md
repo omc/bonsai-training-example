@@ -340,6 +340,18 @@ the dataset and the live index (partial updates, no re-embedding):
 uv run multimodal/commons-qi-flags.py --update-index
 ```
 
+Restart the app afterwards: its response cache (below) still holds the old results.
+
+### Response cache
+
+The multimodal index is static, so a dataset's `cache: { entries: 500 }`
+memoizes OpenSearch responses (search, similar, asset pane, autocomplete and
+the index count) in memory, keyed by the exact request. Repeats skip the query
+embedding and return in ~10ms instead of ~2s. Eviction is least-recently-used,
+so the most common queries stay; nothing expires, and a restart empties it. At
+startup the embed example queries are run at both page sizes to warm it. The
+cache is per process, so each Render instance warms its own.
+
 ## Blind Similarity Comparison (A/B Eval)
 
 `/compare` is a blind A/B harness for judging two image-embedding models against

@@ -2,7 +2,7 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const { Client } = require("@opensearch-project/opensearch");
-const { getClient, search, searchSimilar, randomId, similarTopK, autocomplete } = require("./search");
+const { count, search, searchSimilar, randomId, similarTopK, autocomplete } = require("./search");
 const { runAgentLoop } = require("./sid");
 
 const app = express();
@@ -31,8 +31,7 @@ fs.readdirSync(datasetsDir)
 // --- Helpers ---
 async function getIndexCount(config) {
   try {
-    var resp = await getClient(config).count({ index: config.index });
-    return resp.body.count;
+    return await count(config);
   } catch (e) {
     return null;
   }
@@ -329,8 +328,7 @@ app.get("/:dataset/count", async (req, res) => {
   var config = configs[req.params.dataset];
   if (!config) return res.status(404).send("Dataset not found");
   try {
-    const resp = await getClient(config).count({ index: config.index });
-    res.json({ index: config.index, count: resp.body.count });
+    res.json({ index: config.index, count: await count(config) });
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
@@ -512,7 +510,28 @@ app.get("/:dataset/asset", function (req, res) {
   return renderAsset(req, res, false);
 });
 
+// Fill the caches of datasets with `cache` with the embed examples, at both
+// page sizes, so the first visitors don't pay for embedding them.
+async function warmCaches() {
+  for (const config of Object.values(configs)) {
+    if (!config.cache) continue;
+    var started = Date.now();
+    var examples = (config.embed && config.embed.examples) || [];
+    try {
+      await count(config);
+      for (const q of examples) {
+        await search(config, q, EMBED_PER_PAGE, {}, 0);
+        await search(config, q, config.perPage || 10, {}, 0);
+      }
+      console.log(`Warmed ${config.index} cache: ${examples.length} queries in ${Date.now() - started}ms`);
+    } catch (err) {
+      console.error(`Warming ${config.index} cache failed:`, err.message);
+    }
+  }
+}
+
 // --- Start ---
 app.listen(PORT, () => {
   console.log(`Bonsai Search listening on :${PORT}`);
+  warmCaches();
 });

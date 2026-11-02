@@ -50,8 +50,14 @@ var pointText = function (loc) {
   return {
     text: text,
     href:
-      "https://www.openstreetmap.org/?mlat=" + loc.lat + "&mlon=" + loc.lon +
-      "#map=15/" + loc.lat + "/" + loc.lon,
+      "https://www.openstreetmap.org/?mlat=" +
+      loc.lat +
+      "&mlon=" +
+      loc.lon +
+      "#map=15/" +
+      loc.lat +
+      "/" +
+      loc.lon,
   };
 };
 
@@ -71,6 +77,10 @@ module.exports = {
 
   // Separate cluster from BONSAI_URL.
   url: process.env.BONSAI_MULTIMODAL_URL,
+
+  // The index is static: memoize search, similar, autocomplete and count
+  // responses in memory (LRU; a restart empties it). Entries run ~20-60KB.
+  cache: { entries: 500 },
 
   // Pagination sized to fill the 4-up grid evenly.
   perPage: 24,
@@ -120,17 +130,26 @@ module.exports = {
   // /embed/multimodal: example-query chips; the first loads on open.
   embed: {
     examples: [
-      "sunset over the ocean",
-      "red sports car",
-      "city skyline at night",
-      "lighthouse in a storm",
+      "serene mountain lake",
+      "vibrant incense",
+      "epic extreme sports action",
+      "wildlife in love",
       "old steam train",
       "coffee cup",
     ],
     // A shorter facet list for the marketing frame (aggregation names, in
     // order), trimmed rows, and only the first few expanded so the sidebar
     // doesn't outgrow 12 results.
-    facets: ["depicts", "assessment", "license", "attribution", "taken", "resolution", "country", "camera"],
+    facets: [
+      "depicts",
+      "assessment",
+      "license",
+      "attribution",
+      "taken",
+      "resolution",
+      "country",
+      "camera",
+    ],
     facetSize: 6,
     openFacets: 4,
   },
@@ -146,7 +165,10 @@ module.exports = {
     suggestions: 8,
     docs: 4,
     docTitle: function (src) {
-      return src.caption || (src.title || "").replace(/^File:/, "").replace(/\.[^.]+$/, "");
+      return (
+        src.caption ||
+        (src.title || "").replace(/^File:/, "").replace(/\.[^.]+$/, "")
+      );
     },
     // 120px is a standard Commons step; tiny originals fall back to thumb_url.
     docThumb: function (src) {
@@ -318,13 +340,15 @@ module.exports = {
     // Sharper copies straight from Wikimedia's thumbnail CDN, loaded by the
     // viewer's browser over the inline thumbnail.
     imageSrcset: function (src) {
-      return [500, 960]
-        .map(function (w) {
-          var url = commonsThumb(src, w);
-          return url ? url + " " + w + "w" : null;
-        })
-        .filter(Boolean)
-        .join(", ") || null;
+      return (
+        [500, 960]
+          .map(function (w) {
+            var url = commonsThumb(src, w);
+            return url ? url + " " + w + "w" : null;
+          })
+          .filter(Boolean)
+          .join(", ") || null
+      );
     },
     // Tiles link to image-to-image similarity; this links to the Commons file
     // page, which carries the full license and attribution.
@@ -390,9 +414,10 @@ module.exports = {
             label: "License",
             value: function (src) {
               if (!src.license) return null;
-              var text = src.usage_terms && src.usage_terms !== src.license
-                ? src.license + " — " + src.usage_terms
-                : src.license;
+              var text =
+                src.usage_terms && src.usage_terms !== src.license
+                  ? src.license + " — " + src.usage_terms
+                  : src.license;
               return { text: text, href: src.license_url || null };
             },
           },
@@ -408,7 +433,9 @@ module.exports = {
             label: "Credit line",
             value: function (src) {
               if (!src.author || !src.license) return null;
-              return src.author + ", " + src.license + ", via Wikimedia Commons";
+              return (
+                src.author + ", " + src.license + ", via Wikimedia Commons"
+              );
             },
           },
           {
@@ -429,7 +456,10 @@ module.exports = {
             chips: true,
             value: function (src) {
               return (src.depicts || []).map(function (d) {
-                return { text: d.label, href: "search?q=" + encodeURIComponent(d.label) };
+                return {
+                  text: d.label,
+                  href: "search?q=" + encodeURIComponent(d.label),
+                };
               });
             },
           },
@@ -484,7 +514,12 @@ module.exports = {
               if (isNaN(d)) return src.date_taken;
               // Partial dates ("2019", "2019-06") stay as stored.
               return src.date_taken.length === 10
-                ? d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })
+                ? d.toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                    timeZone: "UTC",
+                  })
                 : src.date_taken;
             },
           },
@@ -492,7 +527,10 @@ module.exports = {
             label: "Place",
             value: function (src) {
               return (src.location_of_creation || []).map(function (l) {
-                return { text: l.label || l.id, href: "https://www.wikidata.org/wiki/" + l.id };
+                return {
+                  text: l.label || l.id,
+                  href: "https://www.wikidata.org/wiki/" + l.id,
+                };
               });
             },
           },
@@ -517,7 +555,11 @@ module.exports = {
             label: "Camera",
             value: function (src) {
               var cw = (src.captured_with || [])[0];
-              if (cw && cw.label) return { text: cw.label, href: "https://www.wikidata.org/wiki/" + cw.id };
+              if (cw && cw.label)
+                return {
+                  text: cw.label,
+                  href: "https://www.wikidata.org/wiki/" + cw.id,
+                };
               var e = src.exif || {};
               return [e.make, e.model].filter(Boolean).join(" ") || null;
             },
@@ -548,7 +590,9 @@ module.exports = {
               var t = (src.exif || {}).exposure_time;
               var v = rational(t);
               if (!v) return null;
-              return v >= 1 ? round(v, 1) + " s" : "1/" + Math.round(1 / v) + " s";
+              return v >= 1
+                ? round(v, 1) + " s"
+                : "1/" + Math.round(1 / v) + " s";
             },
           },
           {
@@ -597,7 +641,9 @@ module.exports = {
               return (src.categories || []).map(function (c) {
                 return {
                   text: c,
-                  href: "https://commons.wikimedia.org/wiki/Category:" + encodeURIComponent(c.replace(/ /g, "_")),
+                  href:
+                    "https://commons.wikimedia.org/wiki/Category:" +
+                    encodeURIComponent(c.replace(/ /g, "_")),
                 };
               });
             },
@@ -624,13 +670,17 @@ module.exports = {
           {
             label: "Commons page",
             value: function (src) {
-              return src.file_page ? { text: src.title || "File page", href: src.file_page } : null;
+              return src.file_page
+                ? { text: src.title || "File page", href: src.file_page }
+                : null;
             },
           },
           {
             label: "Download",
             value: function (src) {
-              return src.original_url ? { text: "Full-resolution original", href: src.original_url } : null;
+              return src.original_url
+                ? { text: "Full-resolution original", href: src.original_url }
+                : null;
             },
           },
         ],

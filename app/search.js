@@ -10,6 +10,36 @@ const getClient = function (config) {
   return clients[config.url];
 };
 
+// Datasets with `config.cache` have a static index, so their responses are
+// memoized by the exact request and never expire; past `cache.entries` the
+// least recently used go. Holds the promise so concurrent identical requests
+// share one call, and hands out copies because callers edit the body.
+const caches = {};
+const cached = async function (config, method, params) {
+  if (!config.cache) return getClient(config)[method](params);
+  var cache = caches[config.index] || (caches[config.index] = new Map());
+  var key = method + " " + JSON.stringify(params);
+  var entry = cache.get(key);
+  if (entry) {
+    cache.delete(key);
+  } else {
+    entry = getClient(config)[method](params).then(function (resp) {
+      return resp.body;
+    });
+    entry.catch(function () {
+      cache.delete(key);
+    });
+  }
+  cache.set(key, entry);
+  if (cache.size > config.cache.entries) cache.delete(cache.keys().next().value);
+  return { body: structuredClone(await entry) };
+};
+
+const count = async function (config) {
+  const resp = await cached(config, "count", { index: config.index });
+  return resp.body.count;
+};
+
 // Vector field used for similarity: top-level for knn datasets, the kNN
 // subquery's field for hybrid ones.
 const knnField = function (config) {
@@ -281,12 +311,12 @@ const searchSimilar = async function (config, id, k, from) {
   const size = pageSize(config, k, from);
   if (size <= 0) return emptyResults();
 
-  const doc = await getClient(config).get({ index: config.index, id: id });
+  const doc = await cached(config, "get", { index: config.index, id: id });
   const src = doc.body._source;
   const vector = src[field];
 
   const body = getKnnQuery(config, vector, size, from);
-  const resp = await getClient(config).search({
+  const resp = await cached(config, "search", {
     index: config.index,
     body: body,
     preference: preferenceFor(id),
@@ -342,7 +372,9 @@ const search = async function (
     body = getQuery(config, querystring, k, filters, permissions);
     body.from = from || 0;
   }
-  const resp = await getClient(config).search(
+  const resp = await cached(
+    config,
+    "search",
     Object.assign(
       {
         index: config.index,
@@ -459,7 +491,7 @@ const autocomplete = async function (config, raw) {
   var query = { match_phrase_prefix: match };
   var exclusion = exclusionFilter(config);
   if (exclusion) query = { bool: { must: query, filter: [exclusion] } };
-  const resp = await getClient(config).search({
+  const resp = await cached(config, "search", {
     index: config.index,
     body: {
       size: ac.docs * 3,
@@ -525,4 +557,4 @@ const autocomplete = async function (config, raw) {
   return { query: raw, took: body.took, suggestions: suggestions, docs: docs };
 };
 
-module.exports = { getClient, search, searchSimilar, randomId, similarTopK, autocomplete };
+module.exports = { getClient, count, search, searchSimilar, randomId, similarTopK, autocomplete };
