@@ -147,21 +147,21 @@
       %>
       <nav class="pagination" aria-label="Search results pages">
         <% if (page > 1) { %>
-        <a class="page-arrow" href="<%= pageUrl(page - 1) %>">&laquo; Prev</a>
+        <a class="page-arrow" rel="nofollow" href="<%= pageUrl(page - 1) %>">&laquo; Prev</a>
         <% } %>
         <% if (startPage > 1) { %>
-        <a class="page-num" href="<%= pageUrl(1) %>">1</a>
+        <a rel="nofollow" class="page-num" href="<%= pageUrl(1) %>">1</a>
         <% if (startPage > 2) { %><span class="page-num">&hellip;</span><% } %>
         <% } %>
         <% for (var p = startPage; p <= endPage; p++) { %>
-        <a class="page-num<%= p === page ? ' active' : '' %>" href="<%= pageUrl(p) %>"><%= p %></a>
+        <a rel="nofollow" class="page-num<%= p === page ? ' active' : '' %>" href="<%= pageUrl(p) %>"><%= p %></a>
         <% } %>
         <% if (endPage < totalPages) { %>
         <% if (endPage < totalPages - 1) { %><span class="page-num">&hellip;</span><% } %>
-        <a class="page-num" href="<%= pageUrl(totalPages) %>"><%= totalPages %></a>
+        <a rel="nofollow" class="page-num" href="<%= pageUrl(totalPages) %>"><%= totalPages %></a>
         <% } %>
         <% if (page < totalPages) { %>
-        <a class="page-arrow" href="<%= pageUrl(page + 1) %>">Next &raquo;</a>
+        <a class="page-arrow" rel="nofollow" href="<%= pageUrl(page + 1) %>">Next &raquo;</a>
         <% } %>
       </nav>
       <% } %>

@@ -308,8 +308,6 @@ app.get("/embed/:dataset", async (req, res) => {
     error,
     examples,
     filters,
-    // Asset pages link "back" here.
-    selfUrl: req.originalUrl,
     indexCount: await getIndexCount(config),
   });
 });

@@ -32,7 +32,7 @@
     Math.round(ar * 240 * 1.3) + 'px';
 %>
 <article class="jg-item<%= isSource ? ' pic-source' : '' %>" style="--ar:<%= ar.toFixed(4) %>">
-  <a class="jg-link" href="<%= href %>" title="<%= linkTitle %>">
+  <a class="jg-link" rel="nofollow" href="<%= href %>" title="<%= linkTitle %>">
     <% if (imgData) { %>
     <img src="<%- imgData %>" alt="<%= title %>" loading="lazy">
     <% } %>
@@ -71,7 +71,7 @@
 </article>
 <% } else { %>
 <article class="pic-card<%= isSource ? ' pic-source' : '' %>">
-  <a class="pic-link" href="<%= href %>" title="<%= linkTitle %>">
+  <a class="pic-link" rel="nofollow" href="<%= href %>" title="<%= linkTitle %>">
     <div class="pic-thumb">
       <% if (imgData) { %>
       <img src="<%- imgData %>" alt="<%= title %>" loading="lazy">
