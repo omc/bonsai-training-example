@@ -15,6 +15,7 @@
     "@opensearch-project/opensearch": "^3.5.0",
     "ejs": "^5.0.2",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.7.3",
     "openai": "^4.86.0"
   }
 }

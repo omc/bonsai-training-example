@@ -1,4 +1,5 @@
 const express = require("express");
+const { rateLimit } = require("express-rate-limit");
 const path = require("path");
 const fs = require("fs");
 const { Client } = require("@opensearch-project/opensearch");
@@ -37,9 +38,35 @@ async function getIndexCount(config) {
   }
 }
 
+// --- Bot control ---
+// Nothing on this site should be crawled or indexed (see also
+// public/robots.txt), and per-IP request rates are capped.
+app.use(function (req, res, next) {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  next();
+});
+// Behind Heroku's router there's one proxy hop; add one per extra layer in
+// front (e.g. a CDN) or every client shares the proxy's IP.
+app.set("trust proxy", parseInt(process.env.TRUST_PROXY_HOPS, 10) || 1);
+
 // --- Static files & body parsing ---
 app.use(express.static(path.join(__dirname, "public")));
 app.use(express.urlencoded({ extended: false }));
+
+const limit = function (envVar, perMinute) {
+  return rateLimit({
+    windowMs: 60 * 1000,
+    limit: parseInt(process.env[envVar], 10) || perMinute,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+  });
+};
+app.use(
+  ["/embed", "/books/agent/stream", "/:dataset/search", "/:dataset/similar", "/:dataset/asset", "/:dataset/count"],
+  limit("RATE_LIMIT_SEARCH", 60),
+);
+// Search-as-you-type fires per keystroke.
+app.use("/:dataset/autocomplete", limit("RATE_LIMIT_AUTOCOMPLETE", 300));
 
 // --- Routes ---
 app.get("/health", async (req, res) => {
