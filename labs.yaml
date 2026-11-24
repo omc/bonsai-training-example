@@ -1,0 +1,17 @@
+name: examples
+contact: max@onemorecloud.com
+runtime: lambda
+arch: arm64
+build:
+  context: app
+  dockerfile: Dockerfile
+service:
+  port: 8080
+  health: /health
+  public: true
+resources:
+  memory_mb: 1024
+  timeout_s: 120          # SID-1 agent loop runs up to 8 turns
+secrets: [BONSAI_URL, BONSAI_MULTIMODAL_URL, JUDGE_KEY, SID_API_KEY]
+env:
+  JUDGE_URL: https://optimi.labs.bonsai.io

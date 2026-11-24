@@ -6,6 +6,7 @@ const { Client } = require("@opensearch-project/opensearch");
 const { getClient, count, search, searchSimilar, randomId, similarTopK, autocomplete } = require("./search");
 const { runAgentLoop } = require("./sid");
 const judge = require("./judge");
+const { createStore } = require("./compare-store");
 
 const app = express();
 const PORT = process.env.PORT || 4444;
@@ -89,28 +90,11 @@ const COMPARE_A = "pictures";
 const COMPARE_B = "pictures-sm";
 const COMPARE_FIELD = "emb";
 const COMPARE_K = 5;
-const COMPARE_LOG = path.join(__dirname, "..", "pictures", "compare-results.ndjson");
-
-function appendCompareRecord(record) {
-  fs.appendFileSync(COMPARE_LOG, JSON.stringify(record) + "\n");
-}
-function readCompareRecords() {
-  try {
-    return fs
-      .readFileSync(COMPARE_LOG, "utf8")
-      .split("\n")
-      .filter(function (l) { return l.trim(); })
-      .map(function (l) {
-        try { return JSON.parse(l); } catch (e) { return null; }
-      })
-      .filter(Boolean);
-  } catch (e) {
-    return [];
-  }
-}
-function countCompareRecords() {
-  return readCompareRecords().length;
-}
+// Records go to S3 on labs (LABS_DATA_URI), else the local ndjson file.
+const compareStore = createStore({
+  dataUri: process.env.LABS_DATA_URI,
+  file: path.join(__dirname, "..", "pictures", "compare-results.ndjson"),
+});
 
 app.get("/compare", async (req, res) => {
   var config = configs[COMPARE_A];
@@ -130,7 +114,7 @@ app.get("/compare", async (req, res) => {
     var aIds = a.neighbors.map(function (h) { return h._id; });
     var bIds = b.neighbors.map(function (h) { return h._id; });
     if (JSON.stringify(aIds) === JSON.stringify(bIds)) {
-      appendCompareRecord({
+      await compareStore.append({
         timestamp: new Date().toISOString(),
         source_id: id,
         left_index: COMPARE_A, left_ids: aIds,
@@ -144,7 +128,7 @@ app.get("/compare", async (req, res) => {
   }
 
   if (!chosen) {
-    return res.render("compare", { config: config, empty: true, count: countCompareRecords() });
+    return res.render("compare", { config: config, empty: true, count: await compareStore.count() });
   }
 
   // Coin toss: which index's result set is shown on the left (keeps it blind).
@@ -163,12 +147,12 @@ app.get("/compare", async (req, res) => {
     source: chosen.a.source,
     left: left,
     right: right,
-    count: countCompareRecords(),
+    count: await compareStore.count(),
   });
 });
 
-app.get("/compare/results", (req, res) => {
-  var records = readCompareRecords();
+app.get("/compare/results", async (req, res) => {
+  var records = await compareStore.readAll();
   var counts = {};
   counts[COMPARE_A] = 0;
   counts[COMPARE_B] = 0;
@@ -219,7 +203,7 @@ app.get("/compare/results", (req, res) => {
   });
 });
 
-app.post("/compare/choose", (req, res) => {
+app.post("/compare/choose", async (req, res) => {
   var choice = req.body.choice;
   if (choice !== "left" && choice !== "right" && choice !== "neutral") choice = "right";
   var leftIndex = req.body.left_index;
@@ -230,7 +214,7 @@ app.post("/compare/choose", (req, res) => {
   try { rightIds = JSON.parse(req.body.right_ids || "[]"); } catch (e) {}
   // "neutral" = no preference, either result set is fine.
   var preferred = choice === "left" ? leftIndex : choice === "right" ? rightIndex : "neutral";
-  appendCompareRecord({
+  await compareStore.append({
     timestamp: new Date().toISOString(),
     source_id: req.body.source_id,
     left_index: leftIndex, left_ids: leftIds,
