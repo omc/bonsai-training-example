@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --env-file=../.env --watch server.js"
+    "dev": "node --env-file=../.env --watch server.js",
+    "test": "node --test"
   },
   "engines": {
     "node": "24.x"

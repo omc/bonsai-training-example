@@ -3,8 +3,9 @@ const { rateLimit } = require("express-rate-limit");
 const path = require("path");
 const fs = require("fs");
 const { Client } = require("@opensearch-project/opensearch");
-const { count, search, searchSimilar, randomId, similarTopK, autocomplete } = require("./search");
+const { getClient, count, search, searchSimilar, randomId, similarTopK, autocomplete } = require("./search");
 const { runAgentLoop } = require("./sid");
+const judge = require("./judge");
 
 const app = express();
 const PORT = process.env.PORT || 4444;
@@ -62,7 +63,7 @@ const limit = function (envVar, perMinute) {
   });
 };
 app.use(
-  ["/embed", "/books/agent/stream", "/:dataset/search", "/:dataset/similar", "/:dataset/asset", "/:dataset/count"],
+  ["/embed", "/books/agent/stream", "/:dataset/search", "/:dataset/similar", "/:dataset/asset", "/:dataset/count", "/:dataset/judge"],
   limit("RATE_LIMIT_SEARCH", 60),
 );
 // Search-as-you-type fires per keystroke.
@@ -410,7 +411,21 @@ app.get("/:dataset/search", async (req, res) => {
   }
   var indexCount = await getIndexCount(config);
   var results;
-  if (query.trim()) {
+  var judging = judge.enabled(config) && judge.requested(req.query.judge);
+  var reranked = null;
+  var rerankError = false;
+  if (query.trim() && req.query.rerank && judging) {
+    try {
+      results = await search(config, query, perPage * RERANK_PAGES, filters, 0, permissions);
+      reranked = await rerankHits(config, query, results.body.hits.hits, perPage);
+    } catch (err) {
+      console.error("rerank:", err.message);
+      rerankError = true;
+    }
+  }
+  if (reranked) {
+    results.body.hits.hits = reranked.hits;
+  } else if (query.trim()) {
     results = await search(config, query, perPage, filters, from, permissions);
   } else {
     // Empty query: nothing to embed/match — render an empty result set.
@@ -429,7 +444,82 @@ app.get("/:dataset/search", async (req, res) => {
     mode: "search",
     similarId: null,
     similarLabel: null,
+    judgeEnabled: judging,
+    reranked: reranked,
+    rerankError: rerankError,
   });
+});
+
+// Judges the top RERANK_PAGES pages in one batch call, a label request per
+// page, and reorders them by grade (ties keep search order). Each hit gets
+// `_judge` = { rank, label, expected_grade } with its original rank.
+const RERANK_PAGES = 5;
+async function rerankHits(config, query, hits, perPage) {
+  var pages = [];
+  for (var i = 0; i < hits.length; i += perPage) pages.push(hits.slice(i, i + perPage));
+  var responses = await judge.labelBatch(config, query, pages);
+  var grades = [];
+  pages.forEach(function (page, p) {
+    var byId = {};
+    responses[p].labels.forEach(function (l) { byId[l.id] = l; });
+    page.forEach(function (hit) {
+      var l = byId[hit._id];
+      var label = l && l.label != null ? l.label : null;
+      hit._judge = { rank: grades.length + 1, label: label, expected_grade: label != null ? l.expected_grade : null };
+      grades.push(label);
+    });
+  });
+  return {
+    hits: judge.rerank(hits, grades),
+    ndcg: judge.ndcg(grades),
+    mean: judge.meanGrade(grades),
+    rubric: responses.length ? responses[0].rubric_id : null,
+    model: responses.length ? responses[0].model : null,
+  };
+}
+
+// --- Relevance grades for a results page (see judge.js) ---
+// Takes the query and the page's hit ids in rank order and fetches the docs
+// itself, so the judge only ever sees indexed content.
+const JUDGE_MAX_IDS = 50;
+app.post("/:dataset/judge", express.json({ limit: "16kb" }), async (req, res) => {
+  var config = configs[req.params.dataset];
+  if (!config || !judge.enabled(config)) return res.status(404).json({ error: "Judge not enabled" });
+
+  var q = req.body && req.body.q;
+  var ids = req.body && req.body.ids;
+  if (typeof q !== "string" || !q.trim() || !Array.isArray(ids) || !ids.length ||
+      ids.length > JUDGE_MAX_IDS || !ids.every(function (id) { return typeof id === "string"; })) {
+    return res.status(400).json({ error: "Expected {q, ids} with 1-" + JUDGE_MAX_IDS + " string ids" });
+  }
+
+  try {
+    var docs = await getClient(config).mget({
+      index: config.index,
+      body: { ids: ids },
+      _source_excludes: config.query.sourceExcludes,
+    });
+    var hits = docs.body.docs.filter(function (d) { return d.found; });
+    var out = await judge.label(config, q, hits);
+    var byId = {};
+    out.labels.forEach(function (l) { byId[l.id] = l; });
+    var labels = ids.map(function (id) {
+      var l = byId[id];
+      return l && l.label != null ? { id: id, label: l.label, expected_grade: l.expected_grade } : { id: id, label: null };
+    });
+    var grades = labels.map(function (l) { return l.label; });
+    res.json({
+      rubric: out.rubric_id,
+      model: out.model,
+      grades: config.judge.grades || null,
+      labels: labels,
+      ndcg: judge.ndcg(grades),
+      mean: judge.meanGrade(grades),
+    });
+  } catch (err) {
+    console.error("judge:", err.message);
+    res.status(502).json({ error: "Judge unavailable" });
+  }
 });
 
 // --- Image-to-image similarity (before /:dataset catch-all) ---

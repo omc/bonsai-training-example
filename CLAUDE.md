@@ -23,12 +23,13 @@ source ../.env
 bash index.sh                            # drops + recreates index, bulk-loads 32 shard files
 ```
 
-No test framework, linter config, or build step exists. `flake.nix` provides eslint_d and prettierd via Nix but they aren't configured with project rules.
+`npm test` runs `node --test` (only `judge.test.js` so far). No linter config or build step exists. `flake.nix` provides eslint_d and prettierd via Nix but they aren't configured with project rules.
 
 ## Environment
 
 - Requires `BONSAI_URL` env var (OpenSearch cluster URL with credentials)
 - `PORT` defaults to 4444
+- `JUDGE_URL` (optional) enables relevance-judge grades on results for datasets with a `judge` config block (books); `JUDGE_KEY` is its bearer token (required by the hosted service); see `app/judge.js`
 - `.env` at repo root (gitignored); `app/.env.example` is the template
 - Nix users: `direnv allow` loads the dev shell
 

@@ -1,4 +1,4 @@
-<article class="result">
+<article class="result"<% if (judgeEnabled) { %> data-judge-id="<%= hit._id %>"<% } %>>
   <div class="thumb" aria-hidden="true">
     <img src="<%- img %>">
   </div>
@@ -11,6 +11,15 @@
       <span><%= val %></span>
       <% }
       }); %>
+      <% if (judgeEnabled) { %><span class="judge-badge" hidden></span><% } %>
+      <% if (judged) {
+        var grades = (config.judge && config.judge.grades) || []; %>
+      <% if (judged.label == null) { %>
+      <span class="judge-badge judge-none">not judged &middot; was #<%= judged.rank %></span>
+      <% } else { %>
+      <span class="judge-badge judge-g<%= judged.label %>" title="expected grade <%= judged.expected_grade.toFixed(2) %>"><%= judged.label %><%= grades[judged.label] ? ' \u00b7 ' + grades[judged.label] : '' %> &middot; was #<%= judged.rank %></span>
+      <% } %>
+      <% } %>
     </div>
     <h3><a href="<%= link %>"><%= title %></a></h3>
     <% if (snippet) { %>

@@ -41,6 +41,33 @@ module.exports = {
     sourceExcludes: ["summaries_embedding"],
   },
 
+  // Relevance grades from the judge service when JUDGE_URL is set (judge.js).
+  // download_count is left out so grades don't echo the popularity boost.
+  // Subjects go in metadata rather than headings (48 tokens dropped most of
+  // them); the "Category: " prefix on bookshelves only spends tokens.
+  judge: {
+    rubric: "web_graded_v1",
+    grades: ["irrelevant", "related", "highly", "perfect"],
+    source: function (src) {
+      return Object.assign({}, src, {
+        bookshelves: [].concat(src.bookshelves || []).map(function (b) {
+          return b.replace(/^Category:\s*/, "");
+        }),
+      });
+    },
+    fields: {
+      title: "title",
+      snippet: "summaries",
+      metadata: {
+        author: "author_names",
+        language: "languages",
+        translator: "translator_names",
+        subject: "subjects",
+        bookshelf: "bookshelves",
+      },
+    },
+  },
+
   aggregations: [
     {
       name: "subjects",
